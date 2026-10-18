@@ -236,6 +236,43 @@ The three-class version replaces the two-class one only if its Sharpe is higher 
 p < 0.05 and its max drawdown is within 25%. An "alt" market needs 12 months of data
 like any other.
 
+## 12. Amendment D: crash response, valuation overlay, final selection rule (2026-10-18)
+
+Written while the test-C walk-forward was running and **before** any result of test C,
+of the variants below, or of the 2015+ holdout had been seen. The only new fact since
+section 11 is the step-B observation that the 12-month trend rules were still invested in
+October 1987 (-13% in one month).
+
+**Base:** TSMOM-12 with the classes chosen by test C (two classes unless test C adopted
+three), unhedged equities, everything else as section 10.
+
+- **D1, multi-speed trend** (Hurst, Ooi & Pedersen 2017): for each market, the share s of
+  three signals that are positive: excess return over EUR cash of the last 1, 3 and 12
+  months. A market is held if s > 0, and its inverse-vol weight inside its class is
+  multiplied by s (1/3, 2/3 or 1) before the class is scaled.
+- **D2, fast volatility:** every volatility used for weights and the 10% target is
+  max(3-month, 12-month) realised volatility, so positions shrink as soon as markets get
+  turbulent and grow back only slowly. Correlations unchanged.
+- **D3:** D1 and D2 together.
+- **E, valuation overlay (strategic level):** US CAPE at T = S&P price / average of the
+  last 120 months of real earnings (Shiller, with the lags of docs/data_lags.md). If it is
+  above the 90th percentile of its own history known at T (from 1881), the equity
+  class's risk budget is halved and the freed budget stays in EUR cash. No international
+  CAPE is available for free, so the US reading is applied to all equity markets. E is
+  applied to the base.
+
+Each is run on 1976-01 to 2014-12 and is one trial. Test as test H/C against the base
+(paired bootstrap of the Sharpe difference), reported with max drawdown and CVaR.
+
+**Final selection rule (frozen now).** The candidate set is every strategy run on the
+main window 1976-01 to 2014-12 with unhedged equities: TSMOM-12, SMA-10, B5, B6 (step B),
+their three-class versions (test C), D1, D2, D3 and E. The final strategy is the one with
+the **highest mean log return after costs and tax subject to max drawdown <= 25%**
+(section 1 objective). Ties within 0.10 pp per year go to the simpler rule, in the order
+B6, TSMOM-12, SMA-10, three-class, D2, D1, D3, E. The rule is applied mechanically; the
+candidate list, the chosen strategy and the holdout protocol are then committed in a
+"holdout freeze" section before any 2015+ number is computed.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -256,3 +293,5 @@ like any other.
 - 2026-10-18: Amendment C (section 11): currencies and gold as a third class, test C;
   commodity futures excluded (no free roll data). Fixed before computing any of their
   statistics.
+- 2026-10-18: Amendment D (section 12): crash-response variants D1-D3, valuation overlay
+  E and the final selection rule, fixed before seeing test-C results.
