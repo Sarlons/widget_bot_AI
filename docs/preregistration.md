@@ -175,6 +175,35 @@ own pre-registration, reported apart (its trials still go in `experiments/log.cs
   only if its Sharpe is higher with p < 0.05 and it does not breach the 25% drawdown
   limit. Otherwise both are reported and the unhedged version is used.
 
+## 10. Implementation details of step B and test H (2026-10-18)
+
+Fixed when Lorenzo said "go ahead" (2026-10-18), **before** any step-B rule, benchmark 5-6
+or test-H result was computed. They resolve points sections 8-9 left open.
+
+- **Eligibility at T:** a market needs its last 12 monthly returns (up to T) all present;
+  the correlation matrix uses the last 36 months only if every selected market has them,
+  otherwise it is diagonal. Signals of the hedged variant use the hedged returns.
+- **Signals:** TSMOM-12 = compounded 12-month return minus compounded 12-month EUR cash
+  > 0. SMA-10 = total-return index at T > mean of its last 10 month-end values (T included).
+- **Risk weighting + class budget:** within each class, selected markets get weights
+  proportional to 1 / (12-month vol), summing to 1; each class portfolio is divided by its
+  own estimated vol and given 0.5 (an empty class gives 0); the sum is scaled to 10% annual
+  vol with the covariance above; if total exposure > 100% it is scaled down to 100%.
+  Rest in EUR cash.
+- **Benchmark 5:** 60% equal weight over eligible equity markets, 40% over eligible bond
+  markets (eligibility as above), rebalanced monthly to target.
+- **Rebalancing:** every month-end to the exact targets (no bands).
+- **Taxes:** as in `src/decision/backtest.py`. Income taxed when earned: equity dividend
+  yield proxied for every country by the US (Shiller) D/P known at T (no international
+  dividend yields in the free data); bond coupon = that country's 10y yield at T / 12,
+  12.5%; EUR cash interest 12.5%, all of its return is income. Hedge P&L (hedged minus
+  unhedged return) is realised every month at 26%, losses go to the 4-year credit pot.
+- **Test H statistic:** Sharpe vs EUR cash of the monthly net returns. Paired stationary
+  bootstrap (Politis-Romano, mean block 12, 10,000 draws, seed 0) of the month triples
+  (hedged, unhedged, cash); two-sided p = share of |d* - d| >= |d|, d = Sharpe(hedged)
+  - Sharpe(unhedged). Same bootstrap gives a 95% interval for the max-drawdown difference.
+- **Trials:** each strategy run on each window is one trial in `experiments/log.csv`.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -190,3 +219,5 @@ own pre-registration, reported apart (its trials still go in `experiments/log.cs
   USD T-bill only as labelled comparison, crypto excluded from the main research,
   currency-hedged equity variant and its test fixed before any hedged return or rule
   result was computed (only the descriptive unhedged universe summary existed).
+- 2026-10-18: section 10, implementation details of step B and test H fixed before
+  running them.
