@@ -1,0 +1,25 @@
+# Data is downloaded by scripts in src/ingest and never committed
+data/
+!data/raw/.gitkeep
+
+# Python environment and caches
+.venv/
+venv/
+env/
+.env
+*.env
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Generated outputs (re-creatable by running the scripts)
+results/*.png
+
+# Unrelated files already in this folder
+Godot_*.exe
+frog/
+mio-gioco/

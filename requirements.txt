@@ -1,0 +1,18 @@
+# Direct dependencies. Exact installed versions are pinned in requirements-lock.txt.
+# Install:  python -m venv .venv  then  .venv\Scripts\python -m pip install -r requirements.txt
+pandas
+numpy
+scipy
+statsmodels
+scikit-learn
+arch
+pyarrow
+duckdb
+pytest
+matplotlib
+yfinance
+pandas-datareader
+requests
+xlrd
+openpyxl
+# later phases: lightgbm, hmmlearn, mlflow
