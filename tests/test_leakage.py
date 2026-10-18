@@ -118,3 +118,12 @@ def test_gold_hidden_for_one_month():
     records = real_records()
     u = universe_panel(records[records["series"].isin(SERIES)], "2008-09-30")
     assert pd.isna(u.loc["2008-09-30", "gold"]) and pd.notna(u.loc["2008-08-31", "gold"])
+
+
+@pytest.mark.parametrize("T", ["1987-09-30", "2000-03-31"])
+def test_step_d_decisions_ignore_future(T):
+    """Crash-response and valuation-overlay weights decided at T ignore the future."""
+    from src.run_step_d import NEEDED, decide_at
+    records = real_records()
+    records = records[records["series"].isin(NEEDED)]
+    assert decide_at(records, T) == decide_at(poison_after(records, T), T)

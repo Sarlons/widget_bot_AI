@@ -29,6 +29,7 @@ choose `.venv\Scripts\python.exe`.
 | `src/decision/multi_asset.py` | step-B rules: TSMOM-12, SMA-10, risk weighting, benchmarks 5-6 |
 | `src/run_step_b.py` | step B + hedge test H -> results/step_b_summary.md |
 | `src/ingest/worldbank.py`, `src/run_step_c.py` | gold prices; step C (currencies + gold) -> results/step_c_summary.md |
+| `src/features/valuation.py`, `src/run_step_d.py` | point-in-time CAPE; step D (crash response, valuation overlay) -> results/step_d_summary.md |
 | `src/validation/deflated_sharpe.py` | Deflated Sharpe Ratio over all logged trials -> results/deflated_sharpe.md |
 | `src/models/historical_mean.py` | baseline forecast every model must beat |
 | `src/decision/benchmarks.py` | the 4 benchmark rules |

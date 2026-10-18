@@ -40,6 +40,12 @@ def decide_at(records: pd.DataFrame, T) -> dict:
     u = universe_panel(records, T)
     out = {(rule, var): target_weights(u, rule, "eq", classes)
            for rule in C_RULES for var, classes in VARIANTS.items()}
+    out["income"] = income_at(records, T)
+    return out
+
+
+def income_at(records: pd.DataFrame, T) -> dict:
+    """Income yields of month T+1 for the tax accounting, known at T."""
     d = as_of(records, T, SERIES)
     dp = as_of(records, T, ["shiller_D", "shiller_P"]).ffill().iloc[-1]
     y = as_of(records, T, [bond_yield_col(c) for c in BONDS]).ffill().iloc[-1]
@@ -50,8 +56,7 @@ def decide_at(records: pd.DataFrame, T) -> dict:
         rate = local_short_rate(d, c).reindex(d.index)
         if T in rate.index and pd.notna(rate.loc[T]):
             income[f"fx_{cur}"] = rate.loc[T] / 12  # deposit interest of month T+1
-    out["income"] = income
-    return out
+    return income
 
 
 def main() -> None:

@@ -67,3 +67,15 @@ def test_three_classes_share_risk_budget():
     w = target_weights(u, "eq_risk", classes=("eq", "bond", "alt"))
     assert any(k in w for k in ALT)
     assert math.isclose(sum(w.values()), 1.0)
+
+
+def test_d_and_e_options():
+    u = _panel()
+    base = target_weights(u, "tsmom12")
+    e = target_weights(u, "tsmom12", equity_scale=0.5)
+    for k, v in base.items():
+        if k.startswith("eq_"):
+            assert math.isclose(e[k], 0.5 * v)
+    for opts in ({"speeds": True}, {"fast_vol": True}, {"speeds": True, "fast_vol": True}):
+        w = target_weights(u, "tsmom12", **opts)
+        assert math.isclose(sum(w.values()), 1.0) and min(w.values()) >= 0

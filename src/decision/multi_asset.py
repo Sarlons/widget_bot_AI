@@ -17,6 +17,12 @@ classes = ("eq", "bond") for step B, ("eq", "bond", "alt") for test C: "alt" = c
 deposits + gold; every non-empty or empty class gets 1/len(classes) of the risk budget.
 Gold is known with a 1-month lag (monthly-average prices), so all its statistics use
 months t-12..t-1 (pre-registration section 11).
+
+Amendment D options of target_weights (section 12):
+  speeds=True       D1: score = share of positive 1/3/12-month excess returns; held if > 0,
+                    inverse-vol weight inside the class multiplied by the score
+  fast_vol=True     D2: every vol = max(3-month, 12-month) realised vol
+  equity_scale=0.5  E: equity weights halved after scaling, the rest stays in cash
 """
 from __future__ import annotations
 
@@ -51,27 +57,45 @@ def signal(u: pd.DataFrame, col: str, rule: str) -> bool:
     raise ValueError(rule)
 
 
-def covariance(u: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    """Annual covariance: 12-month vols, 36-month correlations if all have them, else diagonal."""
+def speed_score(u: pd.DataFrame, col: str) -> float:
+    """D1: share of the 1-, 3- and 12-month excess returns over EUR cash that are positive."""
+    pos = [(1 + u[col].iloc[-m:]).prod() > (1 + u["cash"].iloc[-m:]).prod() for m in (1, 3, 12)]
+    return float(np.mean(pos))
+
+
+def covariance(u: pd.DataFrame, cols: list[str], fast_vol: bool = False) -> pd.DataFrame:
+    """Annual covariance: 12-month vols, 36-month correlations if all have them, else diagonal.
+
+    fast_vol (D2): vol = max(3-month, 12-month) realised vol.
+    """
     vol = u[cols].iloc[-VOL_MONTHS:].std() * np.sqrt(12)
+    if fast_vol:
+        vol = np.maximum(vol, u[cols].iloc[-3:].std() * np.sqrt(12))
     corr = pd.DataFrame(np.eye(len(cols)), index=cols, columns=cols)
     if len(eligible(u, cols, CORR_MONTHS)) == len(cols):
         corr = u[cols].iloc[-CORR_MONTHS:].corr()
     return corr * np.outer(vol, vol)
 
 
-def risk_weights(u: pd.DataFrame, selected: dict[str, list[str]]) -> dict[str, float]:
-    """Inverse-vol inside each class, equal risk per class, 10% vol, cap 100%."""
+def risk_weights(u: pd.DataFrame, selected: dict[str, list[str]],
+                 scores: dict[str, float] | None = None,
+                 fast_vol: bool = False) -> dict[str, float]:
+    """Inverse-vol inside each class, equal risk per class, 10% vol, cap 100%.
+
+    scores (D1) multiply each market's inverse-vol weight inside its class.
+    """
     chosen = [c for cols in selected.values() for c in cols]
     if not chosen:
         return {}
-    cov = covariance(u, chosen)
+    cov = covariance(u, chosen, fast_vol)
     vol = np.sqrt(np.diag(cov))
     v = pd.Series(0.0, index=chosen)
     for cols in selected.values():
         if not cols:
             continue
         p = pd.Series(1 / vol[[chosen.index(c) for c in cols]], index=cols)
+        if scores is not None:
+            p *= pd.Series(scores).reindex(cols)
         p /= p.sum()
         sigma_k = float(np.sqrt(p @ cov.loc[cols, cols] @ p))
         v[cols] += p / sigma_k / len(selected)
@@ -82,7 +106,8 @@ def risk_weights(u: pd.DataFrame, selected: dict[str, list[str]]) -> dict[str, f
 
 
 def target_weights(u: pd.DataFrame, rule: str, sleeve: str = "eq",
-                   classes: tuple = ("eq", "bond")) -> dict[str, float]:
+                   classes: tuple = ("eq", "bond"), speeds: bool = False,
+                   fast_vol: bool = False, equity_scale: float = 1.0) -> dict[str, float]:
     eq_cols = eligible(u, [f"{sleeve}_{c}" for c in EQUITY])
     bd_cols = eligible(u, [f"bond_{c}" for c in BONDS])
     if "alt" in classes:
@@ -92,11 +117,18 @@ def target_weights(u: pd.DataFrame, rule: str, sleeve: str = "eq",
         w = {c: 0.6 / len(eq_cols) for c in eq_cols} if eq_cols else {}
         w.update({c: 0.4 / len(bd_cols) for c in bd_cols} if bd_cols else {})
     else:
-        selected = {"eq": [c for c in eq_cols if signal(u, c, rule)],
-                    "bond": [c for c in bd_cols if signal(u, c, rule)]}
+        pools = {"eq": eq_cols, "bond": bd_cols}
         if "alt" in classes:
-            selected["alt"] = [c for c in alt_cols if signal(u, c, rule)]
-        w = risk_weights(u, selected)
+            pools["alt"] = alt_cols
+        if speeds:
+            scores = {c: speed_score(u, c) for cols in pools.values() for c in cols}
+            selected = {k: [c for c in cols if scores[c] > 0] for k, cols in pools.items()}
+        else:
+            scores = None
+            selected = {k: [c for c in cols if signal(u, c, rule)] for k, cols in pools.items()}
+        w = risk_weights(u, selected, scores, fast_vol)
+        if equity_scale != 1.0:
+            w = {k: v * equity_scale if k.startswith(sleeve + "_") else v for k, v in w.items()}
     w = {k: float(v) for k, v in w.items() if v > 0}
     w["rf"] = max(0.0, 1.0 - sum(w.values()))
     return w
