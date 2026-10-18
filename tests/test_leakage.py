@@ -92,3 +92,12 @@ def test_universe_ignores_future(T):
     records = records[records["series"].isin(SERIES)]
     pd.testing.assert_frame_equal(universe_panel(records, T),
                                   universe_panel(poison_after(records, T), T))
+
+
+@pytest.mark.parametrize("T", ["1983-12-31", "2008-09-30"])
+def test_step_b_decisions_ignore_future(T):
+    """Step-B weights (unhedged and hedged) and income decided at T ignore the future."""
+    from src.run_step_b import NEEDED, decide_at
+    records = real_records()
+    records = records[records["series"].isin(NEEDED)]
+    assert decide_at(records, T) == decide_at(poison_after(records, T), T)

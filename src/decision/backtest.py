@@ -15,6 +15,11 @@ Italian tax model (approximation of the 'regime amministrato', direct holdings):
   * At the end of the period everything is sold and the liquidation tax is charged in
     the last month, so buy-and-hold is not flattered by never-taxed gains.
 Costs: 10 bp of traded value for equity, 5 bp for bonds and T-bills (one-way).
+
+Multi-asset use: asset names may carry a market suffix ("eq_DE", "eqh_JP", "bond_FR");
+the part before "_" ("eqh" counts as "eq") selects costs and tax rates. The cash asset is
+always "rf". Hedged equity ("eqh_") can pass its monthly hedge P&L to `grow`: it is
+realised every month and taxed as a capital gain (losses become credits).
 """
 from __future__ import annotations
 
@@ -31,12 +36,27 @@ INCOME_TAX = {"eq": 0.26, "bond": 0.125, "rf": 0.125}
 CREDIT_YEARS = 4
 
 
+def asset_class(a: str) -> str:
+    """'eq_DE' -> 'eq', 'eqh_JP' -> 'eq', 'bond_FR' -> 'bond', 'rf' -> 'rf'."""
+    c = a.split("_")[0]
+    return "eq" if c == "eqh" else c
+
+
 @dataclass
 class Account:
-    value: dict = field(default_factory=lambda: {a: 0.0 for a in ASSETS})
-    basis: dict = field(default_factory=lambda: {a: 0.0 for a in ASSETS})
+    assets: tuple = ASSETS
+    value: dict = field(default_factory=dict)
+    basis: dict = field(default_factory=dict)
     credits: list = field(default_factory=list)  # [amount, expiry_year]
-    cost: dict = field(default_factory=lambda: dict(COST))  # one-way cost per asset
+    cost: dict = field(default_factory=lambda: dict(COST))  # one-way cost per asset (class)
+
+    def __post_init__(self):
+        for a in self.assets:
+            self.value.setdefault(a, 0.0)
+            self.basis.setdefault(a, 0.0)
+
+    def _cost(self, a: str) -> float:
+        return self.cost.get(a, self.cost[asset_class(a)])
 
     def wealth(self) -> float:
         return sum(self.value.values())
@@ -57,12 +77,12 @@ class Account:
         """Trade to target weights; returns costs + tax paid (EUR)."""
         W = self.wealth()
         base, cost = 0.0, 0.0
-        for a in ASSETS:
+        for a in self.assets:
             trade = target[a] * W - self.value[a]
-            cost += abs(trade) * self.cost[a]
+            cost += abs(trade) * self._cost(a)
             if trade < 0 and self.value[a] > 0:  # sale: realise part of the gain
                 frac = -trade / self.value[a]
-                base += frac * (self.value[a] - self.basis[a]) * CG_FACTOR[a]
+                base += frac * (self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
                 self.basis[a] *= 1 - frac
             elif trade > 0:
                 self.basis[a] += trade
@@ -77,40 +97,57 @@ class Account:
         if amount <= 0 or W <= 0:
             return
         k = 1 - amount / W
-        for a in ASSETS:
+        for a in self.assets:
             self.value[a] *= k
             self.basis[a] *= k
 
-    def grow(self, ret: dict, income_yield: dict) -> None:
-        """One month of returns (EUR); income part is taxed now and reinvested."""
-        for a in ASSETS:
+    def grow(self, ret: dict, income_yield: dict, hedge_pnl: dict | None = None,
+             year: int | None = None) -> None:
+        """One month of returns (EUR); income part is taxed now and reinvested.
+
+        hedge_pnl: monthly hedge return per hedged asset, realised now and taxed as a
+        capital gain in `year` (losses -> credits); the settled amount is reinvested.
+        """
+        hedge_base = 0.0
+        for a in self.assets:
             v0 = self.value[a]
             income = v0 * income_yield[a]
-            tax = income * INCOME_TAX[a]
+            tax = income * INCOME_TAX[asset_class(a)]
             self.value[a] = v0 * (1 + ret[a]) - tax
             self.basis[a] += income - tax  # reinvested net income has its own cost
+            if hedge_pnl and a in hedge_pnl:
+                pnl = v0 * hedge_pnl[a]
+                self.basis[a] += pnl  # realised: no longer an unrealised gain
+                hedge_base += pnl
+        if hedge_pnl:
+            self._deduct(self._capital_gains_tax(hedge_base, year))
 
     def liquidation_tax(self, year: int) -> float:
         """Sell everything at the end: pay costs and tax on all unrealised gains."""
-        base = sum((self.value[a] - self.basis[a]) * CG_FACTOR[a] for a in ASSETS)
-        cost = sum(self.value[a] * self.cost[a] for a in ASSETS)
+        base = sum((self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
+                   for a in self.assets)
+        cost = sum(self.value[a] * self._cost(a) for a in self.assets)
         paid = cost + self._capital_gains_tax(base, year)
         self._deduct(paid)
         return paid
 
 
 def run(weights: pd.DataFrame, realised: pd.DataFrame, income: pd.DataFrame,
-        liquidate_at_end: bool = True, cost: dict | None = None) -> pd.DataFrame:
+        liquidate_at_end: bool = True, cost: dict | None = None,
+        hedge_pnl: pd.DataFrame | None = None) -> pd.DataFrame:
     """Simulate the account.
 
     weights  : index = decision dates T (month-ends), columns eq/bond/rf
     realised : EUR returns for each month, index = month-end of the return month
     income   : income yields (monthly) for each month, same index as realised
-    cost     : optional one-way cost per asset (default COST); e.g. 0 for a EUR deposit
+    cost     : optional one-way cost per asset class (default COST); e.g. 0 for a EUR deposit
+    hedge_pnl: optional monthly hedge return of hedged assets (columns eqh_*), same index
+    Assets = the columns of `weights` (must include the cash asset "rf").
     Returns a DataFrame indexed by return month with the net portfolio return,
     gross (pre-cost, pre-tax) return, turnover and costs+taxes paid.
     """
-    acct = Account(cost=dict(cost or COST))
+    assets = tuple(weights.columns)
+    acct = Account(assets=assets, cost=dict(cost or COST))
     acct.value["rf"] = acct.basis["rf"] = 1.0  # start with 1 EUR in cash
     next_month = {T: (T.to_period("M") + 1).to_timestamp(how="end").normalize()
                   for T in weights.index}
@@ -120,15 +157,17 @@ def run(weights: pd.DataFrame, realised: pd.DataFrame, income: pd.DataFrame,
         nxt = next_month[T]
         w = weights.loc[T].to_dict()
         W0 = acct.wealth()
-        before = {a: acct.value[a] / W0 for a in ASSETS}
-        turnover = sum(abs(w[a] - before[a]) for a in ASSETS) / 2
+        before = {a: acct.value[a] / W0 for a in assets}
+        turnover = sum(abs(w[a] - before[a]) for a in assets) / 2
         paid = _initial(acct, w) if i == 0 else acct.rebalance(w, T.year)
         r = realised.loc[nxt]
-        acct.grow({a: r[a] for a in ASSETS}, {a: income.loc[nxt, a] for a in ASSETS})
+        hp = None if hedge_pnl is None else hedge_pnl.loc[nxt].fillna(0.0).to_dict()
+        acct.grow({a: r[a] for a in assets}, {a: income.loc[nxt, a] for a in assets},
+                  hp, nxt.year)
         if liquidate_at_end and i == len(dates) - 1:
             paid += acct.liquidation_tax(nxt.year)
         rows.append({"date": nxt, "ret": acct.wealth() / W0 - 1,
-                     "gross_ret": sum(w[a] * r[a] for a in ASSETS),
+                     "gross_ret": sum(w[a] * r[a] for a in assets),
                      "turnover": 0.0 if i == 0 else turnover, "paid": paid / W0})
     return pd.DataFrame(rows).set_index("date")
 
@@ -136,8 +175,8 @@ def run(weights: pd.DataFrame, realised: pd.DataFrame, income: pd.DataFrame,
 def _initial(acct: Account, w: dict) -> float:
     """Initial allocation from cash: buy at cost, no tax (cash basis = value)."""
     W = acct.wealth()
-    cost = sum(w[a] * W * acct.cost[a] for a in ASSETS if a != "rf")
-    for a in ASSETS:
+    cost = sum(w[a] * W * acct._cost(a) for a in acct.assets if a != "rf")
+    for a in acct.assets:
         acct.value[a] = acct.basis[a] = w[a] * W
     acct._deduct(cost)
     return cost
