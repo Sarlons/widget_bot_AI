@@ -87,6 +87,49 @@ SE ≈ 0.11 at SR = 0.4, so a Sharpe *difference* of ~0.2 between two strategies
 the limit of detectability. On the ~11-year holdout, SE ≈ 0.31: the holdout can only
 reject large failures, not confirm small edges. Results are interpreted with this in mind.
 
+## 8. Amendment A: multi-asset universe and EUR cash (2026-10-18)
+
+Decided by Lorenzo on 2026-10-18 ("go with A"), after seeing only the US-only baseline
+of step 4, and **before** any statistic of the assets below has been computed.
+
+**Cash leg.** From now on "cash" is a **EUR short-term rate**: the German 3-month rate
+(OECD/FRED `IR3TIB01DEM156N`, 1960+; ~Euribor after 1999). Monthly return = previous
+month's average rate / 12 (known at the start of the month). Before 1960 the USD T-bill
+is used (EUR = USD under the peg then). Interest taxed at 12.5% (proxy for BOT/Bubill).
+Sharpe ratios are measured against this EUR cash. The old USD T-bill version is still
+reported, as a comparison only.
+
+**Universe** (all converted to EUR, unhedged; monthly; development period ends 2014-12):
+
+| Class | Markets | Source | Start |
+|---|---|---|---|
+| Equity | US | CRSP via French | 1926 |
+| Equity | Germany, France, Italy, Spain, Netherlands, Switzerland, UK, Japan, Canada, Australia | French international country indexes, value-weighted USD total returns | 1975 |
+| Govt bonds (10y) | US, Germany, France, Italy, Spain, Netherlands, Switzerland, UK, Japan, Canada, Australia | OECD long-term yields (FRED `IRLTLT01..M156N`), constant-maturity par-bond returns in local currency | 1955–1991 by country |
+| FX | local currency per USD | OECD (FRED `CCUSMA02..M618N`), monthly averages | 1957 |
+
+A market enters a strategy only after **12 months** of its data are available at T
+(36 months for anything using correlations). No market is ever chosen by looking at its
+performance.
+
+**Step B rules (fixed now, monthly rebalancing, long-only, no leverage, rest in EUR cash):**
+
+1. **TSMOM-12**: hold a market if its trailing 12-month return in excess of EUR cash > 0.
+2. **SMA-10**: hold a market if its EUR total-return index > its 10-month average.
+3. **Risk weighting** of the selected markets: inverse 12-month volatility, then the
+   whole portfolio scaled to **10% annual target vol** (trailing 12-month covariance on
+   36 months where available, else diagonal), total exposure capped at 100%.
+4. **Class budget**: equities and bonds each get half of the risk budget before step 3.
+
+Additional benchmarks for the multi-asset tests:
+5. **Global 60/40 buy-and-hold**: 60% equal-weight across available equity markets,
+   40% equal-weight across available bond markets, rebalanced monthly.
+6. **Global equal-risk buy-and-hold**: rule 3 + 4 applied to all available markets
+   without any trend filter (isolates the value of the trend signal).
+
+Main development window for multi-asset results: **1976-01 to 2014-12** (all equity
+markets live, 12-month warm-up). Costs: equity 10 bp, bonds 5 bp, cash 0 bp.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -95,3 +138,6 @@ reject large failures, not confirm small edges. Results are interpreted with thi
   S&P prices are monthly averages that would flatter trend rules. Shiller data are used for
   valuation features. EUR before 1957 approximated with the Bretton Woods peg (see
   docs/data_lags.md).
+- 2026-10-18: Amendment A (section 8): EUR cash leg, international equities and
+  government bonds, step-B rules and benchmarks 5-6 fixed before computing any of their
+  statistics.
