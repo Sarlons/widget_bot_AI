@@ -325,3 +325,8 @@ unhedged), section 10 settings.** Its development DSR with all 45 logged trials 
   E and the final selection rule, fixed before seeing test-C results.
 - 2026-10-18: section 13, holdout freeze: final strategy TSMOM-12 (two classes) chosen
   mechanically by the section-12 rule; holdout protocol and checks fixed before running.
+- 2026-10-18: bug fix before any holdout number existed: the first holdout run stopped
+  with an error because Japan's 10y yield is exactly 0.00% in 2019-01 and 2020-05, where
+  the par-bond formula divides by zero. `bond_return` now uses the zero-yield limit. No
+  development-period yield is zero, so no development result changes. No metric was
+  computed in the failed run; the holdout is then run (once) with the fixed code.

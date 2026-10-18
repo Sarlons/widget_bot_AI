@@ -45,7 +45,9 @@ def bond_return(yields: pd.Series, maturity: float = 10.0) -> pd.Series:
     c = yields.shift(1)
     y = yields
     n = 2 * (maturity - 1 / 12)
-    price = c / y * (1 - (1 + y / 2) ** (-n)) + (1 + y / 2) ** (-n)
+    annuity = (1 - (1 + y / 2) ** (-n)) / y
+    annuity = annuity.where(y.abs() > 1e-10, n / 2)  # limit at a zero yield (e.g. Japan 2019)
+    price = c * annuity + (1 + y / 2) ** (-n)
     return price - 1 + c / 12
 
 
