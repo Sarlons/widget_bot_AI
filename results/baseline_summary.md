@@ -15,10 +15,39 @@ that every model must beat. Clark-West uses Newey-West SE (lag h-1, min 1).
 
 ## Benchmark rules: EUR, after costs and Italian tax (liquidated at period end)
 
-Sharpe is the excess over the EUR return of USD T-bills; its SE ≈ sqrt((1+SR²/2)/years).
+Two versions of the cash leg: **EUR cash** (German 3m rate, primary since amendment A)
+and **USD T-bill** (original, for comparison). Sharpe is the excess over that cash;
+its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill.
 `t NW` = Newey-West t-stat (12 lags) of mean monthly log excess return.
 
-### 1927-07 to 2014-12
+### EUR cash: 1927-07 to 2014-12
+
+| Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| buy_and_hold | 7.04% | 7.29% | 19.5% | 0.28 (0.11) | 1.41 | 84.5% ⚠ | -12.7% | 0.00 | 1.24% |
+| 60_40 | 5.67% | 5.84% | 12.8% | 0.23 (0.11) | 1.26 | 64.4% ⚠ | -8.1% | 0.11 | 1.35% |
+| vol_target_10 | 5.96% | 6.15% | 11.1% | 0.27 (0.11) | 1.61 | 42.3% ⚠ | -7.0% | 0.44 | 1.73% |
+| sma10 | 7.32% | 7.60% | 13.9% | 0.34 (0.11) | 2.12 | 48.7% ⚠ | -9.3% | 1.42 | 2.37% |
+
+### EUR cash: 1947-01 to 2014-12
+
+| Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| buy_and_hold | 7.99% | 8.31% | 15.9% | 0.31 (0.12) | 1.53 | 60.2% ⚠ | -10.1% | 0.00 | 1.18% |
+| 60_40 | 6.13% | 6.32% | 11.3% | 0.22 (0.12) | 1.02 | 47.6% ⚠ | -7.1% | 0.10 | 1.37% |
+| vol_target_10 | 6.38% | 6.59% | 10.9% | 0.24 (0.12) | 1.23 | 42.3% ⚠ | -6.8% | 0.44 | 1.79% |
+| sma10 | 8.05% | 8.38% | 12.9% | 0.35 (0.13) | 2.01 | 33.8% ⚠ | -8.3% | 1.43 | 2.47% |
+
+### EUR cash: 1971-01 to 2014-12
+
+| Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| buy_and_hold | 7.08% | 7.34% | 17.4% | 0.21 (0.15) | 0.64 | 59.9% ⚠ | -11.2% | 0.00 | 1.24% |
+| 60_40 | 6.21% | 6.41% | 12.7% | 0.16 (0.15) | 0.49 | 44.5% ⚠ | -7.8% | 0.10 | 1.37% |
+| vol_target_10 | 5.75% | 5.92% | 11.2% | 0.12 (0.15) | 0.37 | 38.1% ⚠ | -7.1% | 0.45 | 1.64% |
+| sma10 | 8.30% | 8.66% | 14.0% | 0.31 (0.15) | 1.37 | 33.8% ⚠ | -9.2% | 1.36 | 2.50% |
+
+### USD T-bill: 1927-07 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|
@@ -27,7 +56,7 @@ Sharpe is the excess over the EUR return of USD T-bills; its SE ≈ sqrt((1+SR²
 | vol_target_10 | 5.61% | 5.78% | 12.1% | 0.36 (0.11) | 2.49 | 51.2% ⚠ | -7.7% | 0.44 | 1.73% |
 | sma10 | 5.97% | 6.16% | 14.7% | 0.34 (0.11) | 2.23 | 48.8% ⚠ | -9.8% | 1.42 | 2.30% |
 
-### 1947-01 to 2014-12
+### USD T-bill: 1947-01 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|
@@ -36,7 +65,7 @@ Sharpe is the excess over the EUR return of USD T-bills; its SE ≈ sqrt((1+SR²
 | vol_target_10 | 5.94% | 6.12% | 12.2% | 0.35 (0.12) | 2.29 | 51.2% ⚠ | -7.7% | 0.45 | 1.78% |
 | sma10 | 6.34% | 6.54% | 13.9% | 0.36 (0.13) | 2.21 | 41.4% ⚠ | -9.0% | 1.43 | 2.35% |
 
-### 1971-01 to 2014-12
+### USD T-bill: 1971-01 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|

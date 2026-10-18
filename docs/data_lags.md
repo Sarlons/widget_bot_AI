@@ -31,3 +31,16 @@ Lags are deliberately conservative. They are encoded in `src/ingest/*.py`.
 - **EUR before 1957** is approximated by the Bretton Woods peg (EUR returns = USD returns).
 - The store is append-only: a re-download with revised values adds a new vintage;
   `as_of` uses the most recently downloaded value among those already available at T.
+
+## Multi-asset universe (pre-registration amendment A)
+
+| Series (store name) | Source | Frequency / start | Lag | Reason |
+|---|---|---|---|---|
+| `fred_IR3TIB01DEM156N` German 3-month rate (EUR cash) | FRED (OECD) | monthly avg, 1960 | 0 | market rate; used as next month's cash return |
+| `fred_IRLTLT01{CC}M156N` 10y govt yields DE FR IT ES NL CH GB JP CA AU | FRED (OECD) | monthly avg, 1955-1991 | 0 | market rates |
+| `fred_CCUSMA02{CC}M618N` local currency per USD | FRED (OECD) | monthly avg, 1957 | 0 | market rates (euro members in EUR units) |
+| `ffi_{CC}` country stock market total return, USD | French international | monthly, 1975 (CA 1977) | 0 | computed from month-end prices; file updated yearly (now to 2025-12) |
+
+- Bond returns are modelled (constant 10y maturity par bond from monthly-average yields):
+  volatility slightly understated, no real bond index costs.
+- Cross FX for bonds uses monthly averages; euro members use rate 1 from 1999.

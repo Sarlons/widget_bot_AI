@@ -82,3 +82,13 @@ def test_baseline_decisions_ignore_future(T):
     a = decide_at(records, T)
     b = decide_at(poison_after(records, T), T)
     assert a == b
+
+
+@pytest.mark.parametrize("T", ["1980-06-30", "2008-09-30", "2014-12-31"])
+def test_universe_ignores_future(T):
+    """Multi-asset EUR returns at T must not depend on anything published after T."""
+    from src.features.universe import SERIES, universe_panel
+    records = real_records()
+    records = records[records["series"].isin(SERIES)]
+    pd.testing.assert_frame_equal(universe_panel(records, T),
+                                  universe_panel(poison_after(records, T), T))

@@ -36,6 +36,7 @@ class Account:
     value: dict = field(default_factory=lambda: {a: 0.0 for a in ASSETS})
     basis: dict = field(default_factory=lambda: {a: 0.0 for a in ASSETS})
     credits: list = field(default_factory=list)  # [amount, expiry_year]
+    cost: dict = field(default_factory=lambda: dict(COST))  # one-way cost per asset
 
     def wealth(self) -> float:
         return sum(self.value.values())
@@ -58,7 +59,7 @@ class Account:
         base, cost = 0.0, 0.0
         for a in ASSETS:
             trade = target[a] * W - self.value[a]
-            cost += abs(trade) * COST[a]
+            cost += abs(trade) * self.cost[a]
             if trade < 0 and self.value[a] > 0:  # sale: realise part of the gain
                 frac = -trade / self.value[a]
                 base += frac * (self.value[a] - self.basis[a]) * CG_FACTOR[a]
@@ -92,23 +93,24 @@ class Account:
     def liquidation_tax(self, year: int) -> float:
         """Sell everything at the end: pay costs and tax on all unrealised gains."""
         base = sum((self.value[a] - self.basis[a]) * CG_FACTOR[a] for a in ASSETS)
-        cost = sum(self.value[a] * COST[a] for a in ASSETS)
+        cost = sum(self.value[a] * self.cost[a] for a in ASSETS)
         paid = cost + self._capital_gains_tax(base, year)
         self._deduct(paid)
         return paid
 
 
 def run(weights: pd.DataFrame, realised: pd.DataFrame, income: pd.DataFrame,
-        liquidate_at_end: bool = True) -> pd.DataFrame:
+        liquidate_at_end: bool = True, cost: dict | None = None) -> pd.DataFrame:
     """Simulate the account.
 
     weights  : index = decision dates T (month-ends), columns eq/bond/rf
     realised : EUR returns for each month, index = month-end of the return month
     income   : income yields (monthly) for each month, same index as realised
+    cost     : optional one-way cost per asset (default COST); e.g. 0 for a EUR deposit
     Returns a DataFrame indexed by return month with the net portfolio return,
     gross (pre-cost, pre-tax) return, turnover and costs+taxes paid.
     """
-    acct = Account()
+    acct = Account(cost=dict(cost or COST))
     acct.value["rf"] = acct.basis["rf"] = 1.0  # start with 1 EUR in cash
     next_month = {T: (T.to_period("M") + 1).to_timestamp(how="end").normalize()
                   for T in weights.index}
@@ -134,7 +136,7 @@ def run(weights: pd.DataFrame, realised: pd.DataFrame, income: pd.DataFrame,
 def _initial(acct: Account, w: dict) -> float:
     """Initial allocation from cash: buy at cost, no tax (cash basis = value)."""
     W = acct.wealth()
-    cost = sum(w[a] * W * COST[a] for a in ASSETS if a != "rf")
+    cost = sum(w[a] * W * acct.cost[a] for a in ASSETS if a != "rf")
     for a in ASSETS:
         acct.value[a] = acct.basis[a] = w[a] * W
     acct._deduct(cost)

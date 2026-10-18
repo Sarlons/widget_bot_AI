@@ -22,7 +22,10 @@ choose `.venv\Scripts\python.exe`.
 |---|---|
 | `src/ingest/store.py` | point-in-time store; `as_of(records, T)` = what was known at T |
 | `src/ingest/shiller.py`, `fred.py`, `french.py` | downloaders, publication lags |
-| `src/features/returns.py` | monthly total returns (USD and EUR) known at T |
+| `src/features/returns.py` | monthly total returns (USD and EUR) + EUR cash, known at T |
+| `src/features/universe.py` | 11 equity + 11 bond markets in EUR, known at T |
+| `src/ingest/french_intl.py` | French international country indexes |
+| `src/run_universe_summary.py` | describes the universe -> results/universe_summary.md |
 | `src/models/historical_mean.py` | baseline forecast every model must beat |
 | `src/decision/benchmarks.py` | the 4 benchmark rules |
 | `src/decision/backtest.py` | EUR account with costs and Italian taxes |

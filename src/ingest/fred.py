@@ -10,6 +10,17 @@ Series and publication lags (months after the observation month ends):
   CCUSMA02DEM618N  OECD: EUR per USD for Germany (DEM converted at the fixed 1.95583),
                    monthly average                         lag 0   (1957+), EUR proxy before 1999
 
+Multi-asset universe (amendment A, all lag 0: market rates, monthly averages):
+  IR3TIB01DEM156N    German 3-month interbank rate (EUR cash)            (1960+)
+  IR3TIB01EZM156N    euro-area 3-month interbank rate = 3m Euribor       (1994+, used 1999+)
+
+Local short rates for the currency-hedged equity variant (amendment B, lag 0):
+  IR3TIB01{CC}M156N  3-month interbank rate, country CC
+  IR3TCD01JPM156N    Japan 3-month CD rate (1979+, before the interbank series starts 2002)
+  IRSTCI01{CC}M156N  call money rate, Japan (1985+) and Switzerland (1972+) as last fallback
+  IRLTLT01{CC}M156N  OECD 10-year government bond yield, country CC
+  CCUSMA02{CC}M618N  OECD national currency per USD (euro members in EUR units)
+
 Rates are stored as decimals (5.0% -> 0.05). CPI/UNRATE values are today's revised
 numbers (revisions not captured; see store.py).
 
@@ -36,7 +47,16 @@ SERIES = {
     "AAA": (0, True, False),
     "DEXUSEU": (0, False, True),
     "CCUSMA02DEM618N": (0, False, False),
+    "IR3TIB01DEM156N": (0, True, False),
 }
+BOND_COUNTRIES = ["DE", "FR", "IT", "ES", "NL", "CH", "GB", "JP", "CA", "AU"]
+FX_COUNTRIES = ["FR", "IT", "ES", "NL", "CH", "GB", "JP", "CA", "AU"]  # DE already above
+SERIES.update({f"IRLTLT01{cc}M156N": (0, True, False) for cc in BOND_COUNTRIES})
+SERIES.update({f"CCUSMA02{cc}M618N": (0, False, False) for cc in FX_COUNTRIES})
+SERIES["IR3TIB01EZM156N"] = (0, True, False)
+SERIES.update({f"IR3TIB01{cc}M156N": (0, True, False) for cc in FX_COUNTRIES})
+SERIES.update({sid: (0, True, False) for sid in
+               ("IR3TCD01JPM156N", "IRSTCI01JPM156N", "IRSTCI01CHM156N")})
 
 
 def parse(sid: str, content: bytes) -> pd.DataFrame:

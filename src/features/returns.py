@@ -9,6 +9,10 @@ Columns (monthly, simple returns, decimals):
   fx       EUR per 1 USD, month-end (1999+) or monthly average (earlier, see below)
   eq, rf, bond   the same returns converted to EUR (unhedged): (1+r_usd)*(fx_t/fx_t-1) - 1
   eq_index       cumulated equity total-return index in USD (for trend rules)
+  cash_rate      EUR 3-month rate of the month, annual decimal: German 3-month rate
+                 1960-1998, 3-month Euribor from 1999 (German series if Euribor missing).
+  cash           EUR cash return = previous month's cash_rate / 12 (1960+); before 1960
+                 the USD T-bill, equal in EUR under the peg. Amendments A and B.
 
 EUR before 1999: Germany's DEM rate converted at the official 1.95583 DEM/EUR (OECD series,
 1957+). Before 1957 the rate is held at the Bretton Woods peg 4.20 DEM/USD, i.e. EUR
@@ -26,7 +30,8 @@ DEM_PER_EUR = 1.95583
 PEG_EUR_PER_USD = 4.20 / DEM_PER_EUR
 
 SERIES = ["ff_MKT_RF", "ff_RF", "shiller_rate", "fred_GS10", "fred_DEXUSEU",
-          "fred_CCUSMA02DEM618N"]
+          "fred_CCUSMA02DEM618N", "fred_IR3TIB01DEM156N", "fred_IR3TIB01EZM156N"]
+EURIBOR_START = pd.Timestamp("1999-01-01")
 
 
 def bond_return(yields: pd.Series, maturity: float = 10.0) -> pd.Series:
@@ -58,5 +63,9 @@ def returns_panel(records: pd.DataFrame, T) -> pd.DataFrame:
     fx_ret = p["fx"] / p["fx"].shift(1)
     for col in ("eq", "rf", "bond"):
         p[col] = (1 + p[f"{col}_usd"]) * fx_ret - 1
+    euribor = d["fred_IR3TIB01EZM156N"].where(d.index >= EURIBOR_START)
+    p["cash_rate"] = euribor.combine_first(d["fred_IR3TIB01DEM156N"])
+    eur_cash = p["cash_rate"].shift(1) / 12  # rate known at the start of the month
+    p["cash"] = eur_cash.combine_first(p["rf"].where(p.index < pd.Timestamp("1960-02-01")))
     p["eq_index"] = (1 + p["eq_usd"].fillna(0)).cumprod().where(p["eq_usd"].notna())
     return p.dropna(subset=["eq_usd"])

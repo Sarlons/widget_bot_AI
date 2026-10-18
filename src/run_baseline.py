@@ -78,26 +78,35 @@ def main() -> None:
                         f"{cw['cw_pvalue']:.3f} |")
 
     # ---- benchmark strategies ----
+    # Cash leg: EUR cash (amendment A, primary) and USD T-bills (original, comparison).
+    # In the backtest the cash asset is always called "rf".
     income = pd.DataFrame({T: rows[T]["income"] for T in decisions}).T
     income.index = [(T.to_period("M") + 1).to_timestamp(how="end").normalize() for T in income.index]
-    income["rf"] = realised["rf_usd"].reindex(income.index)
+    variants = {
+        "EUR cash": (realised["cash"], realised["cash"], 0.0),          # deposit: no cost
+        "USD T-bill": (realised["rf"], realised["rf_usd"], backtest.COST["rf"]),
+    }
     monthly, metric_rows = {}, []
     periods = [("1927-07", "2014-12"), ("1947-01", "2014-12"), ("1971-01", "2014-12")]
-    for name in RULES:
-        w = pd.DataFrame({T: rows[T][name] for T in decisions}).T.dropna()
-        for start, end in periods:
-            # each period is simulated from scratch (fresh account, liquidated at the end)
-            ws = w.loc[(pd.Timestamp(start) - pd.offsets.MonthEnd(1)):end]
-            res = backtest.run(ws, realised, income)
-            m = strategy_metrics(res["ret"], realised["rf"])
-            m.update(rule=name, turnover_ann=res["turnover"].mean() * 12,
-                     drag_ann=(res["gross_ret"] - res["ret"]).mean() * 12)
-            metric_rows.append(m)
-            if start == periods[0][0]:
-                monthly[name] = res["ret"]
-                log_trial(f"benchmark_{name}", {"period": f"{start}..{end}"},
-                          {k: m[k] for k in ("mean_log_ret_ann", "sharpe", "max_dd")},
-                          notes="pre-registered benchmark, EUR after costs and tax")
+    for cash_name, (cash_ret, cash_income, cash_cost) in variants.items():
+        real_v = realised.assign(rf=cash_ret)
+        inc_v = income.assign(rf=cash_income.reindex(income.index))
+        cost = dict(backtest.COST, rf=cash_cost)
+        for name in RULES:
+            w = pd.DataFrame({T: rows[T][name] for T in decisions}).T.dropna()
+            for start, end in periods:
+                # each period is simulated from scratch (fresh account, liquidated at the end)
+                ws = w.loc[(pd.Timestamp(start) - pd.offsets.MonthEnd(1)):end]
+                res = backtest.run(ws, real_v, inc_v, cost=cost)
+                m = strategy_metrics(res["ret"], real_v["rf"])
+                m.update(rule=name, cash=cash_name, turnover_ann=res["turnover"].mean() * 12,
+                         drag_ann=(res["gross_ret"] - res["ret"]).mean() * 12)
+                metric_rows.append(m)
+                if start == periods[0][0]:
+                    monthly[f"{name} | {cash_name}"] = res["ret"]
+                    log_trial(f"benchmark_{name}", {"period": f"{start}..{end}", "cash": cash_name},
+                              {k: m[k] for k in ("mean_log_ret_ann", "sharpe", "max_dd")},
+                              notes="pre-registered benchmark, EUR after costs and tax")
     metrics = pd.DataFrame(metric_rows)
 
     RESULTS.mkdir(exist_ok=True)
@@ -124,12 +133,14 @@ def write_summary(metrics: pd.DataFrame, fc_lines: list[str]) -> None:
         "",
         "## Benchmark rules: EUR, after costs and Italian tax (liquidated at period end)",
         "",
-        "Sharpe is the excess over the EUR return of USD T-bills; its SE ≈ sqrt((1+SR²/2)/years).",
+        "Two versions of the cash leg: **EUR cash** (German 3m rate, primary since amendment A)",
+        "and **USD T-bill** (original, for comparison). Sharpe is the excess over that cash;",
+        "its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill.",
         "`t NW` = Newey-West t-stat (12 lags) of mean monthly log excess return.",
         "",
     ]
-    for (start, end), g in metrics.groupby(["start", "end"], sort=False):
-        lines += [f"### {start} to {end}", "",
+    for (cash, start, end), g in metrics.groupby(["cash", "start", "end"], sort=False):
+        lines += [f"### {cash}: {start} to {end}", "",
                   "| Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |",
                   "|---|---|---|---|---|---|---|---|---|---|"]
         for _, m in g.iterrows():
