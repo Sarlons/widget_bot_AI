@@ -204,6 +204,38 @@ or test-H result was computed. They resolve points sections 8-9 left open.
   - Sharpe(unhedged). Same bootstrap gives a 95% interval for the max-drawdown difference.
 - **Trials:** each strategy run on each window is one trial in `experiments/log.csv`.
 
+## 11. Amendment C: currencies and gold (2026-10-18)
+
+Lorenzo asked on 2026-10-18 to "finish the rest of the project". Written **before** any
+statistic of the assets below has been computed.
+
+**Why no commodity futures.** A futures position earns spot change + roll yield, and the
+roll yield (contango/backwardation) needs the futures curve, which no free source gives
+over the development period. A modelled roll would be a guess (oil lost tens of percent
+to contango in 2005-2014 while spot rose), so oil, copper and broad commodity indexes stay
+out. **Gold** needs no roll: a physically backed ETC holds bullion.
+
+**New assets (third class, "alt"):**
+
+| Asset | Return in EUR | Source | Start | Lag |
+|---|---|---|---|---|
+| `fx_USD`, `fx_GBP`, `fx_JPY`, `fx_CHF`, `fx_CAD`, `fx_AUD`: 3-month deposit in that currency | (1 + i_c of previous month / 12) × change of EUR per unit of c − 1; EUR per c = EUR per USD (as for equities) × USD per c at month-end (FRED daily H.10 `DEXUSUK`, `DEXJPUS`, `DEXSZUS`, `DEXCAUS`, `DEXUSAL`) | FRED | 1971 (rates as in section 9) | 0 |
+| `gold`: physically backed ETC | change of USD gold price × change of EUR per USD − 0.25%/12 (fee) | World Bank Pink Sheet, monthly average | 1960 | 1 |
+
+- Gold prices are **monthly averages**, which smooth returns and create artificial
+  momentum. To avoid this, gold's trend signals skip the most recent month (months t-12..t-1
+  for TSMOM, index at t-1 vs its 10-month average to t-1 for SMA).
+- Costs: currencies 5 bp, gold 20 bp per trade. Tax: deposit interest 26% when earned;
+  FX and gold gains 26% when realised (capital gains, loss credits as before).
+
+**Test C (pre-registered):** TSMOM-12, SMA-10 and the no-filter equal-risk benchmark (6)
+are run with three classes (equity, bond, alt), each with **1/3** of the risk budget,
+otherwise exactly as section 10, and compared with their step-B two-class versions on
+**1976-01 to 2014-12** (paired stationary bootstrap of the Sharpe difference, as test H).
+The three-class version replaces the two-class one only if its Sharpe is higher with
+p < 0.05 and its max drawdown is within 25%. An "alt" market needs 12 months of data
+like any other.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -221,3 +253,6 @@ or test-H result was computed. They resolve points sections 8-9 left open.
   result was computed (only the descriptive unhedged universe summary existed).
 - 2026-10-18: section 10, implementation details of step B and test H fixed before
   running them.
+- 2026-10-18: Amendment C (section 11): currencies and gold as a third class, test C;
+  commodity futures excluded (no free roll data). Fixed before computing any of their
+  statistics.
