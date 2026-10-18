@@ -79,3 +79,10 @@ def test_d_and_e_options():
     for opts in ({"speeds": True}, {"fast_vol": True}, {"speeds": True, "fast_vol": True}):
         w = target_weights(u, "tsmom12", **opts)
         assert math.isclose(sum(w.values()), 1.0) and min(w.values()) >= 0
+
+
+def test_paper_kill_check():
+    from src.paper.run_paper import kill_check
+    track = pd.DataFrame({"net_ret": [0.01, -0.15, -0.15]})
+    assert any(m.startswith("STOP") for m in kill_check(track))
+    assert kill_check(pd.DataFrame({"net_ret": [0.01, 0.0]})) == []
