@@ -71,3 +71,14 @@ def test_lagged_series_hidden_until_available():
     r = synthetic_records()
     last = as_of(r, "2000-12-31", ["shiller_E"])["shiller_E"].dropna().index.max()
     assert last == pd.Timestamp("2000-06-30")
+
+
+@pytest.mark.parametrize("T", ["1950-06-30", "2008-09-30"])
+def test_baseline_decisions_ignore_future(T):
+    """Forecasts and benchmark weights decided at T must not change if the future is garbage."""
+    from src.run_baseline import NEEDED, decide_at
+    records = real_records()
+    records = records[records["series"].isin(NEEDED)]
+    a = decide_at(records, T)
+    b = decide_at(poison_after(records, T), T)
+    assert a == b

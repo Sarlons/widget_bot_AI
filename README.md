@@ -1,0 +1,31 @@
+# mercatifinanziari: quantitative market research (education/research, not advice)
+
+Rules for the project: see `CLAUDE.md`. Plan and fixed targets: `docs/preregistration.md`.
+
+## Quick start (Windows)
+
+```
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m src.ingest.run_all      # download data (Shiller, FRED, French)
+.venv\Scripts\python -m pytest -q               # tests, incl. the leakage test
+.venv\Scripts\python -m src.run_baseline        # step 4: baseline -> results/baseline_summary.md
+.venv\Scripts\python -m src.validation.power    # how much data is needed to trust a Sharpe
+```
+
+In PyCharm: open this folder, Settings > Project > Python Interpreter > Add > Existing,
+choose `.venv\Scripts\python.exe`.
+
+## Map
+
+| Path | What it does |
+|---|---|
+| `src/ingest/store.py` | point-in-time store; `as_of(records, T)` = what was known at T |
+| `src/ingest/shiller.py`, `fred.py`, `french.py` | downloaders, publication lags |
+| `src/features/returns.py` | monthly total returns (USD and EUR) known at T |
+| `src/models/historical_mean.py` | baseline forecast every model must beat |
+| `src/decision/benchmarks.py` | the 4 benchmark rules |
+| `src/decision/backtest.py` | EUR account with costs and Italian taxes |
+| `src/validation/` | walk-forward dates, metrics, Clark-West, power analysis |
+| `src/run_baseline.py` | runs step 4 end to end |
+| `experiments/log.csv` | every trial ever run (for Sharpe deflation) |
