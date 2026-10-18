@@ -273,6 +273,34 @@ B6, TSMOM-12, SMA-10, three-class, D2, D1, D3, E. The rule is applied mechanical
 candidate list, the chosen strategy and the holdout protocol are then committed in a
 "holdout freeze" section before any 2015+ number is computed.
 
+## 13. Holdout freeze (2026-10-18)
+
+Committed **before** any number of the 2015+ holdout has been computed.
+
+**Selection rule applied (section 12)** to the 1976-01..2014-12 candidates (mean log
+return after costs and tax, max drawdown): D2 8.15% (16%), TSMOM-12 8.12% (17%),
+D3 7.89%, D1 7.80%, SMA-10 7.72%, E 7.67%, TSMOM-12 three classes 7.51%, B5 7.42% (30%,
+excluded), SMA-10 three classes 6.78%, B6 6.70%, B6 three classes 5.60%. D2 and TSMOM-12
+are within 0.10 pp per year, so the tie goes to the simpler rule:
+**final strategy = TSMOM-12, two classes (11 equity + 11 government bond markets, EUR,
+unhedged), section 10 settings.** Its development DSR with all 45 logged trials is 0.93.
+
+**Holdout protocol (run once, `src/run_holdout.py`):**
+- Window **2015-01 to 2025-12** (last month of the international equity data), first
+  decision at 2014-12-31, fresh EUR account, liquidated at the end; same code, costs and
+  taxes as development.
+- Reported alongside: B6 (equal-risk, no filter), B5 (global 60/40), SMA-10 and US
+  buy-and-hold, all two classes, unhedged.
+- Checks for the final strategy: (1) max drawdown <= 25%; (2) mean log return above EUR
+  cash; (3) Sharpe minus B6 with a paired stationary-bootstrap 95% interval,
+  descriptive only (an 11-year window has SE about 0.3 on a Sharpe ratio).
+- Whatever the outcome, nothing is re-tuned on the holdout. If check (1) or (2) fails,
+  the strategy is not taken to paper trading as is; the result is reported and any new
+  idea needs a new pre-registration and new data.
+- Paper trading (if the checks pass) follows docs/paper_trading.md, with kill criteria:
+  stop if the paper drawdown exceeds 25%; review if it exceeds the 95th percentile of
+  the backtest's drawdowns over the same number of months.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -295,3 +323,5 @@ candidate list, the chosen strategy and the holdout protocol are then committed 
   statistics.
 - 2026-10-18: Amendment D (section 12): crash-response variants D1-D3, valuation overlay
   E and the final selection rule, fixed before seeing test-C results.
+- 2026-10-18: section 13, holdout freeze: final strategy TSMOM-12 (two classes) chosen
+  mechanically by the section-12 rule; holdout protocol and checks fixed before running.
