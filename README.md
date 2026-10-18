@@ -28,6 +28,7 @@ choose `.venv\Scripts\python.exe`.
 | `src/run_universe_summary.py` | describes the universe -> results/universe_summary.md |
 | `src/decision/multi_asset.py` | step-B rules: TSMOM-12, SMA-10, risk weighting, benchmarks 5-6 |
 | `src/run_step_b.py` | step B + hedge test H -> results/step_b_summary.md |
+| `src/validation/deflated_sharpe.py` | Deflated Sharpe Ratio over all logged trials -> results/deflated_sharpe.md |
 | `src/models/historical_mean.py` | baseline forecast every model must beat |
 | `src/decision/benchmarks.py` | the 4 benchmark rules |
 | `src/decision/backtest.py` | EUR account with costs and Italian taxes |
