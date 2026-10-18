@@ -13,18 +13,23 @@ then risk weighting with the class budget and 10% vol target (section 10).
   global_60_40  benchmark 5: 60% equal weight equities, 40% equal weight bonds.
 
 sleeve = "eq" (unhedged equities) or "eqh" (currency-hedged equities, test H).
+classes = ("eq", "bond") for step B, ("eq", "bond", "alt") for test C: "alt" = currency
+deposits + gold; every non-empty or empty class gets 1/len(classes) of the risk budget.
+Gold is known with a 1-month lag (monthly-average prices), so all its statistics use
+months t-12..t-1 (pre-registration section 11).
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from src.features.universe import BONDS, EQUITY
+from src.features.universe import BONDS, CURRENCIES, EQUITY
 
 TARGET_VOL = 0.10
 VOL_MONTHS = 12
 CORR_MONTHS = 36
 RULES = ("tsmom12", "sma10", "eq_risk", "global_60_40")
+ALT = [f"fx_{c}" for c in CURRENCIES] + ["gold"]
 
 
 def eligible(u: pd.DataFrame, cols: list[str], months: int = VOL_MONTHS) -> list[str]:
@@ -56,7 +61,7 @@ def covariance(u: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 
 def risk_weights(u: pd.DataFrame, selected: dict[str, list[str]]) -> dict[str, float]:
-    """Inverse-vol inside each class, half of the risk to each class, 10% vol, cap 100%."""
+    """Inverse-vol inside each class, equal risk per class, 10% vol, cap 100%."""
     chosen = [c for cols in selected.values() for c in cols]
     if not chosen:
         return {}
@@ -69,22 +74,28 @@ def risk_weights(u: pd.DataFrame, selected: dict[str, list[str]]) -> dict[str, f
         p = pd.Series(1 / vol[[chosen.index(c) for c in cols]], index=cols)
         p /= p.sum()
         sigma_k = float(np.sqrt(p @ cov.loc[cols, cols] @ p))
-        v[cols] += 0.5 * p / sigma_k
+        v[cols] += p / sigma_k / len(selected)
     w = v * TARGET_VOL / float(np.sqrt(v @ cov @ v))
     if w.sum() > 1:
         w /= w.sum()
     return w.to_dict()
 
 
-def target_weights(u: pd.DataFrame, rule: str, sleeve: str = "eq") -> dict[str, float]:
+def target_weights(u: pd.DataFrame, rule: str, sleeve: str = "eq",
+                   classes: tuple = ("eq", "bond")) -> dict[str, float]:
     eq_cols = eligible(u, [f"{sleeve}_{c}" for c in EQUITY])
     bd_cols = eligible(u, [f"bond_{c}" for c in BONDS])
+    if "alt" in classes:
+        u = u.assign(gold=u["gold"].shift(1))  # row T holds gold's return of T-1
+        alt_cols = eligible(u, ALT)
     if rule == "global_60_40":
         w = {c: 0.6 / len(eq_cols) for c in eq_cols} if eq_cols else {}
         w.update({c: 0.4 / len(bd_cols) for c in bd_cols} if bd_cols else {})
     else:
         selected = {"eq": [c for c in eq_cols if signal(u, c, rule)],
                     "bond": [c for c in bd_cols if signal(u, c, rule)]}
+        if "alt" in classes:
+            selected["alt"] = [c for c in alt_cols if signal(u, c, rule)]
         w = risk_weights(u, selected)
     w = {k: float(v) for k, v in w.items() if v > 0}
     w["rf"] = max(0.0, 1.0 - sum(w.values()))

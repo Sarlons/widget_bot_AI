@@ -28,11 +28,12 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 ASSETS = ("eq", "bond", "rf")
-COST = {"eq": 0.0010, "bond": 0.0005, "rf": 0.0005}
+# fx = foreign-currency deposit, gold = physically backed ETC (amendment C)
+COST = {"eq": 0.0010, "bond": 0.0005, "rf": 0.0005, "fx": 0.0005, "gold": 0.0020}
 CG_TAX = 0.26
 GOVT_FACTOR = 12.5 / 26  # 0.4808: share of a govt-bond gain/loss that enters the base
-CG_FACTOR = {"eq": 1.0, "bond": GOVT_FACTOR, "rf": GOVT_FACTOR}
-INCOME_TAX = {"eq": 0.26, "bond": 0.125, "rf": 0.125}
+CG_FACTOR = {"eq": 1.0, "bond": GOVT_FACTOR, "rf": GOVT_FACTOR, "fx": 1.0, "gold": 1.0}
+INCOME_TAX = {"eq": 0.26, "bond": 0.125, "rf": 0.125, "fx": 0.26, "gold": 0.0}
 CREDIT_YEARS = 4
 
 

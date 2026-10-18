@@ -101,3 +101,20 @@ def test_step_b_decisions_ignore_future(T):
     records = real_records()
     records = records[records["series"].isin(NEEDED)]
     assert decide_at(records, T) == decide_at(poison_after(records, T), T)
+
+
+@pytest.mark.parametrize("T", ["1985-06-30", "2008-09-30"])
+def test_step_c_decisions_ignore_future(T):
+    """Step-C weights (with currencies and gold) and income decided at T ignore the future."""
+    from src.run_step_c import NEEDED, decide_at
+    records = real_records()
+    records = records[records["series"].isin(NEEDED)]
+    assert decide_at(records, T) == decide_at(poison_after(records, T), T)
+
+
+def test_gold_hidden_for_one_month():
+    """Gold (monthly average, lag 1) for month T must not be visible at T."""
+    from src.features.universe import SERIES, universe_panel
+    records = real_records()
+    u = universe_panel(records[records["series"].isin(SERIES)], "2008-09-30")
+    assert pd.isna(u.loc["2008-09-30", "gold"]) and pd.notna(u.loc["2008-08-31", "gold"])

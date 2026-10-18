@@ -6,6 +6,9 @@ Columns (simple monthly returns in EUR, unhedged; NaN before a market's data sta
   eq_US, eq_DE, eq_FR, ...    equity total returns
   bond_US, bond_DE, ...       10-year government bond total returns (par-bond model)
   eqh_US, eqh_DE, ...         currency-HEDGED equity returns (amendment B, test H)
+  fx_USD, fx_GBP, ...         3-month deposits in foreign currency (amendment C)
+  gold                        physically backed gold ETC (amendment C; monthly-average
+                              prices with 1-month lag: row T is NaN at decision date T)
   cash                        EUR cash (German 3m rate to 1998, 3m Euribor from 1999)
 
 Conversions:
@@ -20,6 +23,9 @@ Conversions:
   * Bonds: return in local currency from the OECD 10y yield, then local -> EUR with the
     OECD cross rate (EUR per USD) / (local per USD). Both are monthly averages, so FX
     moves are slightly smoothed. Euro members use rate 1 from 1999 (same currency).
+  * Currency deposits: (1 + i_c of previous month / 12) x change of EUR per unit of c - 1,
+    EUR per c = EUR per USD (as for equities) x USD per c at month-end (FRED H.10).
+  * Gold: change of the USD price x change of EUR per USD - 0.25%/12 ETC fee.
 """
 from __future__ import annotations
 
@@ -37,6 +43,12 @@ EURO_START = pd.Timestamp("1999-01-31")
 HEDGE_COST = 0.0001  # per month
 LOCAL_RATE_CHAIN = ["fred_IR3TIB01{c}M156N", "fred_IR3TCD01{c}M156N", "fred_IRSTCI01{c}M156N"]
 
+# currency -> (country code for the short rate, FRED H.10 series, quoted as USD per unit?)
+CURRENCIES = {"USD": ("US", None, True), "GBP": ("GB", "fred_DEXUSUK", True),
+              "JPY": ("JP", "fred_DEXJPUS", False), "CHF": ("CH", "fred_DEXSZUS", False),
+              "CAD": ("CA", "fred_DEXCAUS", False), "AUD": ("AU", "fred_DEXUSAL", True)}
+GOLD_FEE = 0.0025 / 12  # per month
+
 SERIES = sorted(set(
     BASE_SERIES
     + ["fred_TB3MS"]
@@ -44,7 +56,18 @@ SERIES = sorted(set(
     + [f"ffi_{c}" for c in EQUITY if c != "US"]
     + [f"fred_IRLTLT01{c}M156N" for c in BONDS if c != "US"]
     + [f"fred_CCUSMA02{c}M618N" for c in BONDS if c != "US"]
+    + [v[1] for v in CURRENCIES.values() if v[1]] + ["wb_GOLD"]
 ))
+
+
+def local_short_rate(d: pd.DataFrame, c: str) -> pd.Series:
+    """Annual 3-month rate of country c (decimal): US T-bill, else the LOCAL_RATE_CHAIN."""
+    if c == "US":
+        return d["fred_TB3MS"]
+    rate = pd.Series(float("nan"), index=d.index)
+    for t in LOCAL_RATE_CHAIN:  # first available in this order
+        rate = rate.combine_first(d[t.format(c=c)])
+    return rate
 
 
 def universe_panel(records: pd.DataFrame, T) -> pd.DataFrame:
@@ -72,18 +95,27 @@ def universe_panel(records: pd.DataFrame, T) -> pd.DataFrame:
     for c in EQUITY:
         if c == "US":
             r_local = base["eq_usd"]
-            i_local = d["fred_TB3MS"]
         else:
             local_per_usd = d[f"fred_CCUSMA02{c}M618N"]
             r_local = (1 + d[f"ffi_{c}"]) * (local_per_usd / local_per_usd.shift(1)) - 1
-            i_local = pd.Series(float("nan"), index=d.index)
-            for t in LOCAL_RATE_CHAIN:  # first available in this order
-                i_local = i_local.combine_first(d[t.format(c=c)])
+        i_local = local_short_rate(d, c)
         carry = (i_eur - i_local.shift(1).reindex(u.index)) / 12
         hedged = r_local.reindex(u.index) + carry - HEDGE_COST
         if c in EURO_MEMBERS:
             hedged[hedged.index >= EURO_START] = u.loc[u.index >= EURO_START, f"eq_{c}"]
         u[f"eqh_{c}"] = hedged
+
+    # ---- currency deposits and gold (amendment C) ----
+    for cur, (c, sid, usd_per_unit) in CURRENCIES.items():
+        if sid is None:
+            usd_per = pd.Series(1.0, index=d.index)
+        else:
+            usd_per = d[sid] if usd_per_unit else 1.0 / d[sid]
+        eur_per = (base["fx"] * usd_per.reindex(u.index))
+        interest = local_short_rate(d, c).shift(1).reindex(u.index) / 12
+        u[f"fx_{cur}"] = (1 + interest) * (eur_per / eur_per.shift(1)) - 1
+    gold = d["wb_GOLD"].reindex(u.index)
+    u["gold"] = (gold / gold.shift(1)) * fx_ret - 1 - GOLD_FEE
 
     u["cash"] = base["cash"]
     return u

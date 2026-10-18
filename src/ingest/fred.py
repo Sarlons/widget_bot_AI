@@ -18,6 +18,10 @@ Local short rates for the currency-hedged equity variant (amendment B, lag 0):
   IR3TIB01{CC}M156N  3-month interbank rate, country CC
   IR3TCD01JPM156N    Japan 3-month CD rate (1979+, before the interbank series starts 2002)
   IRSTCI01{CC}M156N  call money rate, Japan (1985+) and Switzerland (1972+) as last fallback
+
+Currency deposits (amendment C), daily H.10 noon rates -> month-end, lag 0 (1971+):
+  DEXUSUK USD per GBP, DEXUSAL USD per AUD, DEXJPUS JPY per USD, DEXSZUS CHF per USD,
+  DEXCAUS CAD per USD
   IRLTLT01{CC}M156N  OECD 10-year government bond yield, country CC
   CCUSMA02{CC}M618N  OECD national currency per USD (euro members in EUR units)
 
@@ -57,6 +61,8 @@ SERIES["IR3TIB01EZM156N"] = (0, True, False)
 SERIES.update({f"IR3TIB01{cc}M156N": (0, True, False) for cc in FX_COUNTRIES})
 SERIES.update({sid: (0, True, False) for sid in
                ("IR3TCD01JPM156N", "IRSTCI01JPM156N", "IRSTCI01CHM156N")})
+SERIES.update({sid: (0, False, True) for sid in
+               ("DEXUSUK", "DEXUSAL", "DEXJPUS", "DEXSZUS", "DEXCAUS")})
 
 
 def parse(sid: str, content: bytes) -> pd.DataFrame:

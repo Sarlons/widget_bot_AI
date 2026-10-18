@@ -56,3 +56,14 @@ def test_hedge_pnl_loss_becomes_credit():
     assert math.isclose(a.value["eqh_US"], 95.0)
     assert math.isclose(a.basis["eqh_US"], 95.0)  # the hedge loss is realised
     assert a.credits[0][0] == 5.0
+
+
+def test_three_classes_share_risk_budget():
+    from src.decision.multi_asset import ALT
+    u = _panel()
+    rng = np.random.default_rng(3)
+    for c in ALT:
+        u[c] = rng.normal(0.003, 0.03, len(u))
+    w = target_weights(u, "eq_risk", classes=("eq", "bond", "alt"))
+    assert any(k in w for k in ALT)
+    assert math.isclose(sum(w.values()), 1.0)
