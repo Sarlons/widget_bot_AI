@@ -16,3 +16,4 @@ requests
 xlrd
 openpyxl
 # later phases: lightgbm, hmmlearn, mlflow
+truststore

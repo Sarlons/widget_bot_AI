@@ -90,3 +90,8 @@ reject large failures, not confirm small edges. Results are interpreted with thi
 ## Changelog
 
 - 2026-10-18: initial version.
+- 2026-10-18 (before any results): the equity total-return series is the CRSP
+  value-weighted market (French Mkt-RF + RF) as proxy for the S&P 500 TR, because Shiller's
+  S&P prices are monthly averages that would flatter trend rules. Shiller data are used for
+  valuation features. EUR before 1957 approximated with the Bretton Woods peg (see
+  docs/data_lags.md).

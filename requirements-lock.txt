@@ -47,6 +47,7 @@ six==1.17.0
 soupsieve==3.0.3
 statsmodels==0.15.0
 threadpoolctl==3.7.0
+truststore==0.10.5
 typing_extensions==4.16.0
 tzdata==2026.5
 urllib3==2.8.0
