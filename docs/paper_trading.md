@@ -1,5 +1,8 @@
 # Paper trading
 
+**Status: stopped on 2026-10-18 at Lorenzo's request**, after the first decision
+(end of September 2026). No further runs are planned; the code and files stay for reference.
+
 Research and education only. No broker, no real money, nothing is sent anywhere.
 
 **Strategy:** TSMOM-12 with two classes (11 equity + 11 government bond markets, EUR,
