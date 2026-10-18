@@ -130,6 +130,51 @@ Additional benchmarks for the multi-asset tests:
 Main development window for multi-asset results: **1976-01 to 2014-12** (all equity
 markets live, 12-month warm-up). Costs: equity 10 bp, bonds 5 bp, cash 0 bp.
 
+## 9. Amendment B: Euribor, currency-hedged equities, scope (2026-10-18)
+
+Decided by Lorenzo on 2026-10-18 ("euro cash + hedge"). Written after the descriptive,
+unhedged universe summary of the development period (`results/universe_summary.md`:
+per-market CAGR/vol/Sharpe/drawdown, no rule applied) had been produced, and **before**
+any hedged return or any step-B rule/benchmark result has been computed.
+
+**Cash leg, precise definition.** EUR cash = German 3-month interbank rate
+(`IR3TIB01DEM156N`) from 1960-01 to 1998-12, then the euro-area 3-month rate
+(= 3-month Euribor, `IR3TIB01EZM156N`) from 1999-01; if the Euribor value of a month is
+not yet available, the German series (which after 1999 is itself Euribor-based) is used.
+Before 1960: USD T-bill (peg). Return and tax as in section 8.
+
+**USD T-bill** stays only as a **comparison**: every table that reports it labels it
+"USD T-bill (comparison)". All Sharpe ratios, cash allocations and objectives use EUR cash.
+
+**Crypto** is out of the main research: no crypto asset enters the universe, rules,
+benchmarks or the holdout test. Any crypto work would be a separate side study with its
+own pre-registration, reported apart (its trials still go in `experiments/log.csv`).
+
+**Currency-hedged equity variant (pre-registered test H).**
+
+- Hedged EUR return of equity market c in month t (rolling 1-month forward hedge of the
+  start-of-month value, covered interest parity):
+  `r_hedged = r_local + (i_EUR - i_c) / 12 - 1 bp`, where `r_local` is the market's
+  total return in its own currency, `i_EUR` the EUR cash rate and `i_c` the local
+  3-month rate, both of the previous month (known when the hedge is set), and 1 bp per
+  month is the roll cost. `r_local` = USD return × change of (local per USD); for the US
+  `r_local` is the USD return itself. Euro members after 1998 are already in EUR, so their
+  hedged and unhedged returns coincide (carry 0, no cost).
+- Local short rate, first available in this order: 3-month interbank (`IR3TIB01{CC}`),
+  3-month CD (`IR3TCD01{CC}`), call money (`IRSTCI01{CC}`); US: 3-month T-bill (`TB3MS`).
+  A market has a hedged version only from the month it has a local rate.
+- Hedge gains/losses are realised monthly and taxed at 26% with loss carry-forward,
+  like equity gains.
+- **Test:** the global equal-risk benchmark (6), rules 1–3 with the class budget (4), and
+  US buy-and-hold are each run twice, equity sleeve unhedged vs hedged, everything else
+  identical (bonds stay unhedged). Window **1983-01 to 2014-12** (all hedged markets
+  live with a 12-month warm-up), the same for both variants. Statistic: difference in
+  Sharpe vs EUR cash (and in max drawdown), paired stationary block bootstrap, mean block
+  12 months, 10,000 draws, two-sided 5%. Each run counts as a trial.
+- **Decision rule:** the unhedged version stays the default. The hedged version replaces it
+  only if its Sharpe is higher with p < 0.05 and it does not breach the 25% drawdown
+  limit. Otherwise both are reported and the unhedged version is used.
+
 ## Changelog
 
 - 2026-10-18: initial version.
@@ -141,3 +186,7 @@ markets live, 12-month warm-up). Costs: equity 10 bp, bonds 5 bp, cash 0 bp.
 - 2026-10-18: Amendment A (section 8): EUR cash leg, international equities and
   government bonds, step-B rules and benchmarks 5-6 fixed before computing any of their
   statistics.
+- 2026-10-18: Amendment B (section 9): cash switches to 3-month Euribor from 1999,
+  USD T-bill only as labelled comparison, crypto excluded from the main research,
+  currency-hedged equity variant and its test fixed before any hedged return or rule
+  result was computed (only the descriptive unhedged universe summary existed).
