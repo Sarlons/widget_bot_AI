@@ -84,7 +84,7 @@ def main() -> None:
     income.index = [(T.to_period("M") + 1).to_timestamp(how="end").normalize() for T in income.index]
     variants = {
         "EUR cash": (realised["cash"], realised["cash"], 0.0),          # deposit: no cost
-        "USD T-bill": (realised["rf"], realised["rf_usd"], backtest.COST["rf"]),
+        "USD T-bill (comparison)": (realised["rf"], realised["rf_usd"], backtest.COST["rf"]),
     }
     monthly, metric_rows = {}, []
     periods = [("1927-07", "2014-12"), ("1947-01", "2014-12"), ("1971-01", "2014-12")]
@@ -133,8 +133,8 @@ def write_summary(metrics: pd.DataFrame, fc_lines: list[str]) -> None:
         "",
         "## Benchmark rules: EUR, after costs and Italian tax (liquidated at period end)",
         "",
-        "Two versions of the cash leg: **EUR cash** (German 3m rate, primary since amendment A)",
-        "and **USD T-bill** (original, for comparison). Sharpe is the excess over that cash;",
+        "Two versions of the cash leg: **EUR cash** (German 3m rate to 1998, 3m Euribor from",
+        "1999; amendments A-B) and **USD T-bill (comparison)** (original setting). Sharpe is the excess over that cash;",
         "its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill.",
         "`t NW` = Newey-West t-stat (12 lags) of mean monthly log excess return.",
         "",

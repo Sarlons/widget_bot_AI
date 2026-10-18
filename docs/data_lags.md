@@ -44,3 +44,16 @@ Lags are deliberately conservative. They are encoded in `src/ingest/*.py`.
 - Bond returns are modelled (constant 10y maturity par bond from monthly-average yields):
   volatility slightly understated, no real bond index costs.
 - Cross FX for bonds uses monthly averages; euro members use rate 1 from 1999.
+
+## Rates for EUR cash and currency hedging (pre-registration amendment B)
+
+| Series (store name) | Source | Start | Lag | Use |
+|---|---|---|---|---|
+| `fred_IR3TIB01EZM156N` euro-area 3-month rate (= 3m Euribor) | FRED (OECD) | 1994 (used from 1999) | 0 | EUR cash from 1999; German series as fallback |
+| `fred_IR3TIB01{CC}M156N` 3-month interbank, FR IT ES NL CH GB JP CA AU | FRED (OECD) | 1956-2002 by country | 0 | local rate for hedging |
+| `fred_IR3TCD01JPM156N` Japan 3-month CD | FRED (OECD) | 1979 | 0 | Japan local rate before 2002 |
+| `fred_IRSTCI01JPM156N`, `fred_IRSTCI01CHM156N` call money | FRED (OECD) | 1985 / 1972 | 0 | last fallback (Switzerland until 1999) |
+| `fred_TB3MS` | FRED | 1934 | 0 | US local rate for hedging |
+
+All hedged equity series are live from 1982 (Netherlands is last), hence the
+pre-registered test window 1983-01 to 2014-12.

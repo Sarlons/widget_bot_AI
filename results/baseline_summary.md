@@ -15,8 +15,8 @@ that every model must beat. Clark-West uses Newey-West SE (lag h-1, min 1).
 
 ## Benchmark rules: EUR, after costs and Italian tax (liquidated at period end)
 
-Two versions of the cash leg: **EUR cash** (German 3m rate, primary since amendment A)
-and **USD T-bill** (original, for comparison). Sharpe is the excess over that cash;
+Two versions of the cash leg: **EUR cash** (German 3m rate to 1998, 3m Euribor from
+1999; amendments A-B) and **USD T-bill (comparison)** (original setting). Sharpe is the excess over that cash;
 its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill.
 `t NW` = Newey-West t-stat (12 lags) of mean monthly log excess return.
 
@@ -47,7 +47,7 @@ its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill
 | vol_target_10 | 5.75% | 5.92% | 11.2% | 0.12 (0.15) | 0.37 | 38.1% ⚠ | -7.1% | 0.45 | 1.64% |
 | sma10 | 8.30% | 8.66% | 14.0% | 0.31 (0.15) | 1.37 | 33.8% ⚠ | -9.2% | 1.36 | 2.50% |
 
-### USD T-bill: 1927-07 to 2014-12
+### USD T-bill (comparison): 1927-07 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|
@@ -56,7 +56,7 @@ its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill
 | vol_target_10 | 5.61% | 5.78% | 12.1% | 0.36 (0.11) | 2.49 | 51.2% ⚠ | -7.7% | 0.44 | 1.73% |
 | sma10 | 5.97% | 6.16% | 14.7% | 0.34 (0.11) | 2.23 | 48.8% ⚠ | -9.8% | 1.42 | 2.30% |
 
-### USD T-bill: 1947-01 to 2014-12
+### USD T-bill (comparison): 1947-01 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|
@@ -65,7 +65,7 @@ its SE ≈ sqrt((1+SR²/2)/years). Before 1960 both cash legs are the USD T-bill
 | vol_target_10 | 5.94% | 6.12% | 12.2% | 0.35 (0.12) | 2.29 | 51.2% ⚠ | -7.7% | 0.45 | 1.78% |
 | sma10 | 6.34% | 6.54% | 13.9% | 0.36 (0.13) | 2.21 | 41.4% ⚠ | -9.0% | 1.43 | 2.35% |
 
-### USD T-bill: 1971-01 to 2014-12
+### USD T-bill (comparison): 1971-01 to 2014-12
 
 | Rule | Mean log ret | CAGR | Vol | Sharpe (SE) | t NW | Max DD | CVaR 5% (m) | Turnover/yr | Cost+tax drag/yr |
 |---|---|---|---|---|---|---|---|---|---|

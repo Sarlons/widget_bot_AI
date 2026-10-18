@@ -27,6 +27,8 @@ def main() -> None:
     records = load_all()
     u = universe_panel(records[records["series"].isin(SERIES)], DEV_END)
     u = u[u.index <= DEV_END]
+    # hedged equity series are reserved for the pre-registered test H (amendment B)
+    u = u.drop(columns=[c for c in u.columns if c.startswith("eqh_")])
     assert_no_holdout(u.index)
     w = u.loc[WINDOW[0]:WINDOW[1]]
     cash = w["cash"]
