@@ -127,3 +127,21 @@ def test_step_d_decisions_ignore_future(T):
     records = real_records()
     records = records[records["series"].isin(NEEDED)]
     assert decide_at(records, T) == decide_at(poison_after(records, T), T)
+
+
+def test_globalrank_features_and_labels_ignore_future():
+    """Project 2: features of months <= T and labels known by T ignore data after T."""
+    from src.globalrank.data import SERIES
+    from src.globalrank.run_all import build
+    T = "1996-06-30"
+    records = real_records()
+    records = records[records["series"].isin(SERIES)]
+    if not records["series"].str.startswith("frg_").any():
+        pytest.skip("project 2 data not downloaded")
+    _, fa, la = build(records, pd.Timestamp(T))
+    _, fb, lb = build(poison_after(records, T), pd.Timestamp(T))
+    for t in fa:
+        pd.testing.assert_frame_equal(fa[t], fb[t])
+    assert la.keys() == lb.keys()
+    for t in la:
+        pd.testing.assert_series_equal(la[t], lb[t])

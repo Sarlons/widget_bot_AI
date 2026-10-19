@@ -43,3 +43,13 @@ def test_govt_bond_gains_taxed_at_12_5_percent():
     paid = a.rebalance({"eq": 0.0, "bond": 0.0, "rf": 1.0}, 2000)
     tax = paid - 200 * 0.0005 - 200 * 0.0005  # minus sell + buy costs
     assert math.isclose(tax, 0.125 * 100, rel_tol=1e-9)
+
+
+def test_etf_losses_do_not_offset_etf_gains():
+    a = Account(assets=("etf_DE", "etf_FR", "rf"))
+    a.value["etf_DE"], a.basis["etf_DE"] = 200.0, 100.0   # +100 gain
+    a.value["etf_FR"], a.basis["etf_FR"] = 50.0, 150.0    # -100 loss
+    paid = a.rebalance({"etf_DE": 0.0, "etf_FR": 0.0, "rf": 1.0}, 2000)
+    tax = paid - 250 * 0.0010 - 250 * 0.0005               # sell costs + cash buy cost
+    assert math.isclose(tax, 0.26 * 100, rel_tol=1e-9)
+    assert a.credits == []

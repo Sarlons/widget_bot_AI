@@ -29,11 +29,16 @@ import pandas as pd
 
 ASSETS = ("eq", "bond", "rf")
 # fx = foreign-currency deposit, gold = physically backed ETC (amendment C)
-COST = {"eq": 0.0010, "bond": 0.0005, "rf": 0.0005, "fx": 0.0005, "gold": 0.0020}
+COST = {"eq": 0.0010, "bond": 0.0005, "rf": 0.0005, "fx": 0.0005, "gold": 0.0020,
+        "etf": 0.0010}
 CG_TAX = 0.26
 GOVT_FACTOR = 12.5 / 26  # 0.4808: share of a govt-bond gain/loss that enters the base
-CG_FACTOR = {"eq": 1.0, "bond": GOVT_FACTOR, "rf": GOVT_FACTOR, "fx": 1.0, "gold": 1.0}
-INCOME_TAX = {"eq": 0.26, "bond": 0.125, "rf": 0.125, "fx": 0.26, "gold": 0.0}
+CG_FACTOR = {"eq": 1.0, "bond": GOVT_FACTOR, "rf": GOVT_FACTOR, "fx": 1.0, "gold": 1.0,
+             "etf": 1.0}
+INCOME_TAX = {"eq": 0.26, "bond": 0.125, "rf": 0.125, "fx": 0.26, "gold": 0.0, "etf": 0.0}
+# accumulating UCITS ETFs (project 2): gains are 'redditi di capitale', taxed in full at
+# sale; losses are 'redditi diversi' and cannot offset them (lost in an ETF-only account)
+NO_OFFSET = {"etf"}
 CREDIT_YEARS = 4
 
 
@@ -77,18 +82,22 @@ class Account:
     def rebalance(self, target: dict, year: int) -> float:
         """Trade to target weights; returns costs + tax paid (EUR)."""
         W = self.wealth()
-        base, cost = 0.0, 0.0
+        base, cost, no_offset_tax = 0.0, 0.0, 0.0
         for a in self.assets:
             trade = target[a] * W - self.value[a]
             cost += abs(trade) * self._cost(a)
             if trade < 0 and self.value[a] > 0:  # sale: realise part of the gain
                 frac = -trade / self.value[a]
-                base += frac * (self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
+                gain = frac * (self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
+                if asset_class(a) in NO_OFFSET:
+                    no_offset_tax += CG_TAX * max(gain, 0.0)
+                else:
+                    base += gain
                 self.basis[a] *= 1 - frac
             elif trade > 0:
                 self.basis[a] += trade
             self.value[a] += trade
-        paid = cost + self._capital_gains_tax(base, year)
+        paid = cost + self._capital_gains_tax(base, year) + no_offset_tax
         self._deduct(paid)
         return paid
 
@@ -125,10 +134,13 @@ class Account:
 
     def liquidation_tax(self, year: int) -> float:
         """Sell everything at the end: pay costs and tax on all unrealised gains."""
-        base = sum((self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
-                   for a in self.assets)
+        gains = {a: (self.value[a] - self.basis[a]) * CG_FACTOR[asset_class(a)]
+                 for a in self.assets}
+        base = sum(g for a, g in gains.items() if asset_class(a) not in NO_OFFSET)
+        no_offset_tax = sum(CG_TAX * max(g, 0.0) for a, g in gains.items()
+                            if asset_class(a) in NO_OFFSET)
         cost = sum(self.value[a] * self._cost(a) for a in self.assets)
-        paid = cost + self._capital_gains_tax(base, year)
+        paid = cost + self._capital_gains_tax(base, year) + no_offset_tax
         self._deduct(paid)
         return paid
 

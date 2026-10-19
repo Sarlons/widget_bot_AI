@@ -25,7 +25,11 @@ URL = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Internati
 # file name in the zip -> our country code (same codes as the FRED/OECD series)
 COUNTRIES = {"Germany.Dat": "DE", "France.Dat": "FR", "Italy.Dat": "IT", "Spain.Dat": "ES",
              "Nethrlnd.Dat": "NL", "Swtzrlnd.Dat": "CH", "UK.Dat": "GB", "Japan.Dat": "JP",
-             "Canada.Dat": "CA", "Austrlia.Dat": "AU"}
+             "Canada.Dat": "CA", "Austrlia.Dat": "AU",
+             # project 2 (docs/globalrank_preregistration.md): the remaining countries
+             "Austria.Dat": "AT", "Belgium.Dat": "BE", "Denmark.Dat": "DK", "Finland.Dat": "FI",
+             "HongKong.Dat": "HK", "Ireland.Dat": "IE", "Malaysia.Dat": "MY",
+             "NewZland.Dat": "NZ", "Norway.Dat": "NO", "Singapor.Dat": "SG", "Sweden.Dat": "SE"}
 
 
 def parse_country(text: str) -> pd.Series:

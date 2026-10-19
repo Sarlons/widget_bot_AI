@@ -32,6 +32,7 @@ choose `.venv\Scripts\python.exe`.
 | `src/features/valuation.py`, `src/run_step_d.py` | point-in-time CAPE; step D (crash response, valuation overlay) -> results/step_d_summary.md |
 | `src/run_holdout.py` | the single final test on 2015+ -> results/holdout_summary.md |
 | `src/paper/run_paper.py`, `src/ingest/yahoo.py` | monthly paper trading (docs/paper_trading.md) |
+| `src/globalrank/` | project 2: global index ranking, fully automated (`python -m src.globalrank.run_all`) -> results/globalrank/report.html |
 | `src/validation/deflated_sharpe.py` | Deflated Sharpe Ratio over all logged trials -> results/deflated_sharpe.md |
 | `src/models/historical_mean.py` | baseline forecast every model must beat |
 | `src/decision/benchmarks.py` | the 4 benchmark rules |
