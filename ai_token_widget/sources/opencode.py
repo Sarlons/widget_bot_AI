@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from ..core.load import classify_model_kind
 from ..core.models import Session, SessionState, Usage
 from .base import SourceAdapter
 
@@ -31,6 +32,8 @@ DEFAULT_ROOT = Path(
     os.environ.get("OPENCODE_DATA")
     or (Path.home() / ".local" / "share" / "opencode")
 )
+WRITE_TOOL_NAMES = frozenset({"edit", "write"})
+PATH_KEYS = ("path", "filePath", "file_path")
 
 SESSION_COLUMNS = (
     "id",
@@ -260,6 +263,123 @@ class OpenCodeAdapter(SourceAdapter):
             )
         return None
 
+    def _message_counts(
+        self, connection: sqlite3.Connection, session_id: str
+    ) -> tuple[int, int]:
+        if "session_message" not in self._tables(connection):
+            return 0, 0
+        columns = self._columns(connection, "session_message")
+        if not {"session_id", "type"} <= set(columns):
+            return 0, 0
+        try:
+            rows = connection.execute(
+                "SELECT type, COUNT(*) AS count FROM session_message "
+                "WHERE session_id = ? GROUP BY type",
+                (session_id,),
+            ).fetchall()
+        except sqlite3.Error:
+            return 0, 0
+        counts = {str(row["type"]): int(row["count"] or 0) for row in rows}
+        return counts.get("user", 0), counts.get("assistant", 0)
+
+    def _prompt_chars(
+        self, connection: sqlite3.Connection, session_id: str
+    ) -> int:
+        if "session_message" not in self._tables(connection):
+            return 0
+        columns = self._columns(connection, "session_message")
+        if not {"session_id", "type", "data"} <= set(columns):
+            return 0
+        try:
+            rows = connection.execute(
+                "SELECT data FROM session_message "
+                "WHERE session_id = ? AND type = 'user'",
+                (session_id,),
+            ).fetchall()
+        except sqlite3.Error:
+            return 0
+        total = 0
+        for row in rows:
+            try:
+                data = json.loads(row["data"]) if row["data"] else {}
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            text = data.get("text")
+            if isinstance(text, str):
+                total += len(text)
+            content = data.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    block_text = block.get("text")
+                    if isinstance(block_text, str):
+                        total += len(block_text)
+        return total
+
+    def _modified_paths(
+        self, connection: sqlite3.Connection, session_id: str
+    ) -> tuple[str, ...]:
+        if "session_message" not in self._tables(connection):
+            return ()
+        columns = self._columns(connection, "session_message")
+        if not {"session_id", "data"} <= set(columns):
+            return ()
+        try:
+            rows = connection.execute(
+                "SELECT data FROM session_message WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+        except sqlite3.Error:
+            return ()
+        paths: list[str] = []
+        seen: set[str] = set()
+        for row in rows:
+            try:
+                data = json.loads(row["data"]) if row["data"] else {}
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "tool":
+                    continue
+                if block.get("name") not in WRITE_TOOL_NAMES:
+                    continue
+                state = block.get("state")
+                if not isinstance(state, dict):
+                    continue
+                # ``executed`` is not a reliable completion flag in OpenCode
+                # stores (completed tools can still carry false). The tool state
+                # is authoritative.
+                if str(state.get("status") or "").lower() in (
+                    "running",
+                    "pending",
+                    "error",
+                ):
+                    continue
+                tool_input = state.get("input")
+                if not isinstance(tool_input, dict):
+                    continue
+                for key in PATH_KEYS:
+                    value = tool_input.get(key)
+                    if not isinstance(value, str):
+                        continue
+                    cleaned = normalize_path(value)
+                    if not cleaned:
+                        continue
+                    dedupe = os.path.normcase(os.path.normpath(cleaned))
+                    if dedupe not in seen:
+                        seen.add(dedupe)
+                        paths.append(cleaned)
+                    break
+        return tuple(paths)
+
     # -- adapter --------------------------------------------------------
 
     def sessions(self) -> list[Session]:
@@ -377,6 +497,12 @@ class OpenCodeAdapter(SourceAdapter):
                 except (TypeError, ValueError):
                     cost_usd = None
 
+                prompt_count, assistant_count = self._message_counts(
+                    connection, session_id
+                )
+                prompt_chars = self._prompt_chars(connection, session_id)
+                modified_paths = self._modified_paths(connection, session_id)
+
                 sessions.append(
                     Session(
                         id=session_id,
@@ -394,6 +520,13 @@ class OpenCodeAdapter(SourceAdapter):
                         updated_at=activity_at,
                         cwd=directory,
                         source=provider or "opencode",
+                        prompt_count=prompt_count,
+                        prompt_chars=prompt_chars,
+                        assistant_count=assistant_count,
+                        model_kind=classify_model_kind(
+                            model, usage_total.reasoning_tokens
+                        ),
+                        modified_paths=modified_paths,
                     )
                 )
             return sessions

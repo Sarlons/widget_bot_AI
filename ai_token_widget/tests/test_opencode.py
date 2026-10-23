@@ -98,7 +98,13 @@ class OpenCodeAdapterTest(unittest.TestCase):
                         1,
                         _ms(NOW - timedelta(seconds=10)),
                         None,
-                        json.dumps({"role": "user", "time": {"created": _ms(NOW - timedelta(seconds=10))}}),
+                        json.dumps(
+                            {
+                                "role": "user",
+                                "text": "hello",
+                                "time": {"created": _ms(NOW - timedelta(seconds=10))},
+                            }
+                        ),
                     ),
                 )
                 assistant = {
@@ -177,6 +183,88 @@ class OpenCodeAdapterTest(unittest.TestCase):
         self.assertEqual(session.usage_total.output_tokens, 200)
         self.assertEqual(session.usage_total.cache_read_tokens, 500)
         self.assertEqual(session.cost_usd, 0.0)
+
+    def test_prompt_api_and_modified_file_metrics(self) -> None:
+        edited = str(self.root / "edited.py")
+        written = str(self.root / "written.py")
+        connection = sqlite3.connect(self.db)
+        try:
+            connection.execute(
+                "INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "ses_run-user-2",
+                    "ses_run",
+                    "user",
+                    4,
+                    _ms(NOW - timedelta(seconds=4)),
+                    None,
+                    json.dumps({"role": "user", "text": "follow up"}),
+                ),
+            )
+            assistant = {
+                "role": "assistant",
+                "model": {"id": "deepseek-test", "providerID": "opencode"},
+                "content": [
+                    {
+                        "type": "tool",
+                        "name": "edit",
+                        "executed": False,
+                        "state": {
+                            "status": "completed",
+                            "input": {"path": edited, "oldString": "a"},
+                        },
+                    },
+                    {
+                        "type": "tool",
+                        "name": "write",
+                        "executed": False,
+                        "state": {
+                            "status": "completed",
+                            "input": {"path": written, "content": "x"},
+                        },
+                    },
+                    {
+                        "type": "tool",
+                        "name": "read",
+                        "executed": False,
+                        "state": {
+                            "status": "completed",
+                            "input": {"path": str(self.root / "read.py")},
+                        },
+                    },
+                    {
+                        "type": "tool",
+                        "name": "shell",
+                        "executed": False,
+                        "state": {
+                            "status": "completed",
+                            "input": {"command": "echo hi"},
+                        },
+                    },
+                ],
+            }
+            connection.execute(
+                "INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "ses_run-assistant-2",
+                    "ses_run",
+                    "assistant",
+                    5,
+                    _ms(NOW - timedelta(seconds=3)),
+                    _ms(NOW - timedelta(seconds=3)),
+                    json.dumps(assistant),
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        session = {s.id: s for s in self._adapter().sessions()}["ses_run"]
+        self.assertEqual(session.prompt_count, 2)
+        self.assertEqual(session.prompt_chars, len("hello") + len("follow up"))
+        self.assertEqual(session.assistant_count, 3)
+        self.assertEqual(set(session.modified_paths), {edited, written})
+        self.assertEqual(session.model_kind, "reasoning")
 
     def test_archived_sessions_are_skipped(self) -> None:
         connection = sqlite3.connect(self.db)

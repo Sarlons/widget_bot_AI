@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
+from ..core.load import classify_model_kind
 from ..core.models import Confidence, Quota, QuotaWindow, Session, SessionState, Usage
 from .base import SourceAdapter
 
@@ -38,6 +40,11 @@ THREAD_COLUMNS = (
     "rollout_path",
 )
 CACHE_LIMIT = 64
+PATCH_HEADER = re.compile(
+    r"^[ \t]*\*\*\* (?:Add|Update|Delete) File:[ \t]*(.+?)[ \t]*$",
+    re.MULTILINE,
+)
+TOOL_RECORD_TYPES = frozenset({"custom_tool_call", "function_call"})
 
 
 @dataclass(frozen=True)
@@ -49,6 +56,10 @@ class RolloutData:
     context_window: int | None = None
     quota: Quota | None = None
     rate_limit_reached: bool = False
+    prompt_count: int = 0
+    prompt_chars: int = 0
+    assistant_count: int = 0
+    modified_paths: tuple[str, ...] = ()
 
 
 def normalize_windows_path(value: str | None) -> str | None:
@@ -257,6 +268,40 @@ def _project_name(cwd: str | None) -> str:
     return Path(cleaned).name or cleaned or "unknown"
 
 
+def _content_chars(content) -> int:
+    """Return text length from a Codex message without retaining it."""
+    if isinstance(content, str):
+        return len(content)
+    if not isinstance(content, list):
+        return 0
+    total = 0
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        text = block.get("text")
+        if isinstance(text, str):
+            total += len(text)
+    return total
+
+
+def extract_patch_paths(text: str) -> list[str]:
+    """Extract file headers from an apply_patch body.
+
+    Codex often stores the patch inside an ``exec`` tool string with literal
+    ``\\n`` separators. Only the ``*** Update/Add/Delete File:`` header lines are
+    inspected; patch contents are ignored.
+    """
+    if not isinstance(text, str) or not text:
+        return []
+    normalized = text.replace("\\r\\n", "\n").replace("\\n", "\n")
+    paths: list[str] = []
+    for match in PATCH_HEADER.finditer(normalized):
+        value = match.group(1).strip().strip('"')
+        if value:
+            paths.append(normalize_windows_path(value) or value)
+    return paths
+
+
 class CodexAdapter(SourceAdapter):
     name = "codex"
     display_name = "Codex"
@@ -363,9 +408,17 @@ class CodexAdapter(SourceAdapter):
         quota = None
         reached = False
         captured_at = self._now()
+        prompt_count = 0
+        prompt_chars = 0
+        assistant_messages = 0
+        token_usage_calls = 0
+        modified_paths: list[str] = []
+        seen_modified: set[str] = set()
 
         for record in _tail_records(path):
             record_type = record.get("type")
+            if record_type == "token_usage_record":
+                token_usage_calls += 1
             payload = record.get("payload")
             if not isinstance(payload, dict):
                 continue
@@ -377,6 +430,27 @@ class CodexAdapter(SourceAdapter):
                 candidate = payload.get("cwd")
                 if isinstance(candidate, str):
                     cwd = candidate
+            elif record_type == "response_item":
+                item_type = payload.get("type")
+                if item_type == "message":
+                    role = payload.get("role")
+                    if role == "user":
+                        prompt_count += 1
+                        prompt_chars += _content_chars(payload.get("content"))
+                    elif role == "assistant":
+                        assistant_messages += 1
+                elif item_type in TOOL_RECORD_TYPES:
+                    raw_input = payload.get("input")
+                    if raw_input is None:
+                        raw_input = payload.get("arguments")
+                    if isinstance(raw_input, dict):
+                        raw_input = json.dumps(raw_input)
+                    if isinstance(raw_input, str):
+                        for path_value in extract_patch_paths(raw_input):
+                            key = os.path.normcase(os.path.normpath(path_value))
+                            if key not in seen_modified:
+                                seen_modified.add(key)
+                                modified_paths.append(path_value)
             elif record_type == "event_msg" and payload.get("type") == "token_count":
                 info = payload.get("info")
                 if isinstance(info, dict):
@@ -401,6 +475,10 @@ class CodexAdapter(SourceAdapter):
             context_window=context_window,
             quota=quota,
             rate_limit_reached=reached,
+            prompt_count=prompt_count,
+            prompt_chars=prompt_chars,
+            assistant_count=token_usage_calls or assistant_messages,
+            modified_paths=tuple(modified_paths),
         )
         self._cache[key] = (signature[0], signature[1], data)
         if len(self._cache) > CACHE_LIMIT:
@@ -472,6 +550,14 @@ class CodexAdapter(SourceAdapter):
                     updated_at=updated_at,
                     cwd=cwd,
                     source=str(row.get("source") or ""),
+                    prompt_count=rollout.prompt_count,
+                    prompt_chars=rollout.prompt_chars,
+                    assistant_count=rollout.assistant_count,
+                    model_kind=classify_model_kind(
+                        model or "unknown",
+                        (usage_total or Usage()).reasoning_tokens,
+                    ),
+                    modified_paths=rollout.modified_paths,
                 )
             )
         return sessions

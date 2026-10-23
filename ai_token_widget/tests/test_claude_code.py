@@ -34,10 +34,13 @@ def _assistant(
     model: str = "claude-opus-5-5",
     sidechain: bool = False,
     message_id: str | None = None,
+    content: list[dict] | None = None,
 ) -> dict:
     message = {"role": "assistant", "model": model, "usage": usage}
     if message_id is not None:
         message["id"] = message_id
+    if content is not None:
+        message["content"] = content
     return {
         "type": "assistant",
         "sessionId": "will-be-overridden",
@@ -49,13 +52,18 @@ def _assistant(
     }
 
 
-def _user(moment: datetime, session_id: str) -> dict:
+def _user(
+    moment: datetime, session_id: str, content: str | list[dict] | None = None
+) -> dict:
+    message = {"role": "user"}
+    if content is not None:
+        message["content"] = content
     return {
         "type": "user",
         "sessionId": session_id,
         "cwd": "C:\\work\\alpha",
         "timestamp": _iso(moment),
-        "message": {"role": "user"},
+        "message": message,
     }
 
 
@@ -186,6 +194,89 @@ class ClaudeAdapterTest(unittest.TestCase):
         self.assertEqual(session.usage_total.input_tokens, 10)
         self.assertEqual(session.usage_total.output_tokens, 2)
         self.assertEqual(session.model, "claude-opus-5-5")
+
+    def test_prompt_api_and_modified_file_metrics(self) -> None:
+        written = Path(self.temp.name) / "written.txt"
+        edited = Path(self.temp.name) / "edited.txt"
+        read_only = Path(self.temp.name) / "read.txt"
+        self._write(
+            "metrics.jsonl",
+            [
+                _user(
+                    NOW - timedelta(seconds=60),
+                    "metrics",
+                    content="please change two files",
+                ),
+                _assistant(
+                    NOW - timedelta(seconds=50),
+                    _usage(10, 2, 0, 0),
+                    message_id="msg-1",
+                    content=[
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {"file_path": str(written), "content": "x"},
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "Edit",
+                            "input": {"file_path": str(edited), "old_string": "a"},
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "Read",
+                            "input": {"file_path": str(read_only)},
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "Bash",
+                            "input": {"command": "echo hi"},
+                        },
+                    ],
+                ),
+                # A duplicate content block for the same API response.
+                _assistant(
+                    NOW - timedelta(seconds=49),
+                    _usage(10, 2, 0, 0),
+                    message_id="msg-1",
+                    content=[
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {"file_path": str(written), "content": "x"},
+                        }
+                    ],
+                ),
+                _assistant(
+                    NOW - timedelta(seconds=48),
+                    _usage(5, 1, 0, 0),
+                    message_id="msg-2",
+                ),
+                _user(
+                    NOW - timedelta(seconds=47),
+                    "metrics",
+                    content=[{"type": "tool_result", "content": "ok"}],
+                ),
+                _user(
+                    NOW - timedelta(seconds=46),
+                    "metrics",
+                    content=[{"type": "text", "text": "follow up"}],
+                ),
+            ],
+            "metrics",
+        )
+        session = {s.id: s for s in self._adapter().sessions()}["metrics"]
+        self.assertEqual(session.prompt_count, 2)
+        self.assertEqual(
+            session.prompt_chars,
+            len("please change two files") + len("follow up"),
+        )
+        self.assertEqual(session.assistant_count, 2)
+        self.assertEqual(
+            set(session.modified_paths), {str(written), str(edited)}
+        )
+        self.assertEqual(session.model_kind, "multimodal")
+        self.assertEqual(session.modified_file_count, 2)
 
     def test_statusline_quota_is_attached(self) -> None:
         snapshot = {

@@ -3,8 +3,8 @@
 Windows desktop widget showing the remaining context/quota of local AI coding
 sessions (Claude Code, Codex, OpenCode) and which of them are running.
 
-**Status: Phase 10 complete (v0.5.1) — accuracy audit fixes.** All three
-adapters are wired into the app; refreshes run off the GUI thread, a second
+**Status: v0.6.0 — project organization, modified-file size and management
+load.** All three adapters are wired into the app; refreshes run off the GUI thread, a second
 launch reveals the existing window, and quota/state transitions produce
 deduplicated tray alerts. Cards are grouped by provider, groups collapse, and
 the list can be filtered by activity or searched by project/model. The footer
@@ -18,6 +18,14 @@ applies notification, threshold, refresh, sound, appearance and per-provider
 mute changes without editing JSON, and exposes sanitized diagnostics and log
 shortcuts. Claude Code quota is available through that opt-in bridge; until it
 is installed, Claude cards show usage and estimated context but no quota.
+
+v0.6.0 adds a project section above the provider groups: sessions are grouped by
+working directory, the top six projects are ordered by total tokens, and each
+row shows the agents involved, unique modified files, their current on-disk size
+and a 1–5 management-load index. Only paths reported by write/edit tool calls are
+measured, and file contents are never opened. Prompt text is never retained:
+the load index uses prompt frequency and total prompt character count as an
+amplitude signal.
 
 ## What it shows
 
@@ -45,6 +53,18 @@ is installed, Claude cards show usage and estimated context but no quota.
   and red below 20%.
 - Estimated values are labelled `(est.)`; quota snapshots show `as of …` when
   they are more than two minutes old.
+- A `PROJECTS` section above the provider groups organizes sessions by working
+  directory and shows the top six projects by token total. Each row lists the
+  agents, session count, unique modified files, current on-disk size and a
+  1–5 management-load badge.
+- Modified-file totals include only files an agent wrote or edited through a
+  write/edit tool call. Paths are normalized and deduplicated before a single
+  `os.stat` per file; reads, searches, folder scans and build artifacts are not
+  counted. Deleted or unreadable files are counted as missing without bytes.
+- The management-load index is a visual heuristic, not a billing or quota
+  metric. It combines prompt frequency and average prompt size, current context
+  pressure, API-turn frequency and the model class (reasoning, multimodal or
+  general).
 
 ## Safety invariants
 
@@ -52,6 +72,11 @@ is installed, Claude cards show usage and estimated context but no quota.
   `PRAGMA query_only=1`; transcript files are only read.
 - The widget never reads `.env`, `.credentials.json`, `auth.json`, or the
   OpenCode `account` / `credential` tables.
+- Modified-file paths come from write/edit tool metadata. The widget never opens
+  those files: it only calls `os.stat` on the normalized, deduplicated paths.
+  File contents, diffs and build artifacts are not read or stored.
+- Prompt amplitude is stored as a character count only. Prompt text is never
+  retained, logged, shown in notifications or included in diagnostics.
 - The Claude bridge persists only rate-limit numbers, reset times and a session
   id. It never stores prompts, transcript paths, cwd, model output or secrets.
 - Installing the Claude bridge changes only the `statusLine` field in
@@ -231,6 +256,29 @@ at the bridge.
   with an empty search, so a filtered view cannot hide sessions at startup.
   Collapse state, by contrast, is a layout preference and is persisted.
 
+## Project organization and management load
+
+- Sessions are grouped by normalized `cwd`. Sessions without a working directory
+  are grouped by project name in an `unknown:<project>` bucket.
+- The project section keeps the six projects with the highest total tokens.
+  Ties fall back to latest activity and then folder name.
+- Modified files are unioned across the project's sessions. A relative path is
+  resolved against that session's `cwd`; a relative path without a known `cwd`
+  is counted but not sized, so it cannot accidentally match a widget-relative
+  file. A path is measured only once per project.
+- Size is the file's current size on disk, not the cumulative number of bytes
+  written during the session. A file that was deleted after the edit is counted
+  as missing and contributes no bytes.
+- The load score is a 0–1 composite: prompts 35%, context pressure 30%, API turns
+  20% and model factor 15%. The prompt component is 65% frequency and 35% average
+  prompt character count. Scores map to `LIGHT` (1–2), `MEDIUM` (3), `HEAVY` (4)
+  and `VERY HEAVY` (5).
+- Model classes are `reasoning`, `multimodal` and `general`. A nonzero reasoning
+  token count wins over the model-id heuristic. The model factor is only a hint:
+  it does not claim a model is more expensive or more capable.
+- The index is intentionally relative to one local machine and recent activity.
+  It is not a quota, billing or benchmark metric.
+
 ## Claude Code quota bridge (opt-in)
 
 Claude Code does not write account rate limits to its transcripts. It does pass
@@ -264,11 +312,11 @@ ai_token_widget\.venv\Scripts\python.exe -m ai_token_widget.claude_bridge uninst
 
 ## Provider details
 
-| Provider | Inventory | Token usage | Context window | Account quota |
-|---|---|---|---|---|
-| Claude Code | `~/.claude/projects/**/*.jsonl` | exact per unique message (`message.usage`, deduped by message id) | estimated from model family | exact via opt-in status-line bridge |
-| Codex | `~/.codex/state_5.sqlite` `threads` | exact cumulative + per-turn; cached input is a subset of input | exact from rollout tail (model-specific, e.g. 475,000) | exact 5h/weekly; freshest account snapshot shared by all cards |
-| OpenCode | `~/.local/share/opencode/opencode.db` | exact `session_v2` totals + latest-message usage | exact from local models.dev catalog | unavailable locally |
+| Provider | Inventory | Token usage | Context window | Account quota | Modified files |
+|---|---|---|---|---|---|
+| Claude Code | `~/.claude/projects/**/*.jsonl` | exact per unique message (`message.usage`, deduped by message id) | estimated from model family | exact via opt-in status-line bridge | `Write` / `Edit` / `MultiEdit` / `NotebookEdit` tool inputs |
+| Codex | `~/.codex/state_5.sqlite` `threads` | exact cumulative + per-turn; cached input is a subset of input | exact from rollout tail (model-specific, e.g. 475,000) | exact 5h/weekly; freshest account snapshot shared by all cards | `apply_patch` headers in the rollout tail; recent activity only |
+| OpenCode | `~/.local/share/opencode/opencode.db` | exact `session_v2` totals + latest-message usage | exact from local models.dev catalog | unavailable locally | `edit` / `write` tool states in `session_message` |
 
 ### Claude Code
 
@@ -281,6 +329,10 @@ ai_token_widget\.venv\Scripts\python.exe -m ai_token_widget.claude_bridge uninst
   families and Opus 4.6-4.8/Sonnet 4.6 are treated as 1M; other Claude models,
   including Haiku 4.5, as 200K. These are estimates and are labelled
   `Context (est.)`.
+- Modified paths come from `Write`, `Edit`, `MultiEdit` and `NotebookEdit` tool
+  inputs. Bash redirections or other shell writes are not inferred. Prompt count
+  excludes tool-result records and sidechains; prompt amplitude is a character
+  count only.
 
 ### Codex
 
@@ -292,6 +344,10 @@ ai_token_widget\.venv\Scripts\python.exe -m ai_token_widget.claude_bridge uninst
 - Rate limits are account-wide. Every Codex card uses the freshest rollout
   snapshot with rate-limit windows rather than a per-session snapshot.
 - Rollouts are read from the tail only and cached by `(mtime, size)`.
+- Modified paths are best effort from `*** Add/Update/Delete File:` headers in
+  `apply_patch` tool inputs inside that tail. Older edits outside the tail, and
+  shell writes, may be missing. Prompt/API counts come from `response_item`
+  messages and `token_usage_record` entries in the same tail.
 
 ### OpenCode
 
@@ -301,6 +357,11 @@ ai_token_widget\.venv\Scripts\python.exe -m ai_token_widget.claude_bridge uninst
 - The context window comes from the local `models-dev:catalog` row in `kv`.
   Only that row is read from `kv`; credential tables are never queried.
 - The database is opened read-only and connections are closed after each poll.
+- Prompt and assistant counts come from `session_message` rows; prompt amplitude
+  uses the user row's `text` length. Modified paths come from completed `edit`
+  and `write` tool items in `session_message`. OpenCode's `executed` flag is not
+  reliable for completed tools, so `state.status` is authoritative. Shell
+  writes are not inferred.
 
 ## Running state
 
@@ -329,9 +390,15 @@ that the adapter already considers running.
 - `core/logging_setup.py`: rotating log file and unhandled-exception hook.
 - `core/diagnostics.py`: sanitized support report and refresh health summary.
 - `core/model_limits.py`: Claude context-window estimates.
-- `sources/codex.py`: threads + rollout-tail quota/context.
-- `sources/claude_code.py`: transcript usage/context + bridge quota.
-- `sources/opencode.py`: SQLite sessions/messages + models.dev context.
+- `core/load.py`: model classification and the 1–5 management-load heuristic.
+- `core/projects.py`: cwd grouping, unique modified-path sizing and project
+  summaries.
+- `sources/codex.py`: threads + rollout-tail quota/context, prompts and patch
+  paths.
+- `sources/claude_code.py`: transcript usage/context, prompts and write/edit
+  paths + bridge quota.
+- `sources/opencode.py`: SQLite sessions/messages, prompts and edit/write paths +
+  models.dev context.
 - `claude_statusline.py`: dependency-free status-line capture script.
 - `claude_bridge.py`: opt-in install/uninstall/status CLI with field-level undo.
 - `single_instance.py`: per-user local socket; second launch raises the window.
@@ -343,6 +410,7 @@ that the adapter already considers running.
 - `ui/settings.py`: scrollable settings panel for notifications, sound,
   threshold, refresh interval, appearance, per-provider alert mutes and
   diagnostics shortcuts.
+- `ui/projects.py`: project rows, modified-file totals and load badges.
 - `ui/`: floating window, tray, filter bar, cards, context/quota bars.
 - `packaging/`: PyInstaller specs and launchers, icon/version generation,
   `build.ps1`, and the Inno Setup installer script.
@@ -370,6 +438,22 @@ The final audit compared adapter and card values with the real local stores:
 - **OpenCode:** cumulative fields, latest-message context and catalog context
   limits matched the database and were left unchanged.
 
+### v0.6.0 project/load audit
+
+- **OpenCode modified files:** completed `edit`/`write` tools can still carry
+  `executed=false`. Treating that flag as completion dropped every OpenCode file
+  from the project view. The adapter now uses `state.status`; completed edits are
+  counted, while running, pending and errored tools are skipped.
+- **Path deduplication:** repeated writes to the same normalized path count once.
+  Sizes are read with `os.stat`, so the project total is the current size of the
+  touched files rather than the sum of every write payload.
+- **Prompt amplitude:** the load index counts prompt characters but never stores
+  prompt text. Frequency remains the larger prompt component (65%) so one huge
+  paste does not dominate the index.
+- **Real-data check:** after the OpenCode fix, the local project view reported
+  modified files for the main OpenCode and Codex workspaces instead of showing
+  zero edits.
+
 ## Known limitations
 
 - OpenCode does not expose account quota locally; provider-specific quota (for
@@ -396,6 +480,21 @@ The final audit compared adapter and card values with the real local stores:
   There is no auto-update mechanism; rebuild and reinstall to upgrade.
 - The packaged GUI and bridge are x64 Windows builds. A 32-bit or ARM64 build
   would need a separate PyInstaller run.
+- Project file totals only include tool-reported write/edit paths. Writes done
+  through a shell command, a build step or an external editor are not counted.
+- Codex modified paths are limited to the `1.5 MB` rollout tail. Edits from
+  earlier in a long thread may be missing, so Codex project sizes are a
+  recent-activity estimate.
+- File size is the current size of each touched file, not the cumulative number
+  of bytes written. A deleted file is counted as missing and contributes no
+  bytes.
+- Sessions without a `cwd` are grouped by project name; their relative modified
+  paths are counted but cannot be sized safely.
+- The project section shows the top six projects by token total. Projects below
+  the cut are not shown in that section, though their session cards remain.
+- The management-load index is a local heuristic based on recent activity. It is
+  not a provider quota, billing estimate or benchmark, and prompt amplitude is a
+  character count rather than a tokenizer result.
 
 ## Phase 0 findings (2026-10-22, this PC)
 

@@ -17,6 +17,7 @@ from ai_token_widget.sources.codex import (
     CodexAdapter,
     RolloutData,
     apply_window_rollover,
+    extract_patch_paths,
     normalize_windows_path,
     select_shared_quota,
 )
@@ -186,6 +187,72 @@ class CodexAdapterTest(unittest.TestCase):
         self.assertEqual(session.quota.windows[0].used_percent, 40.0)
         self.assertEqual(session.quota.credits_usd, 12.5)
         self.assertEqual(session.quota.plan, "pro")
+
+    def test_prompt_api_and_patch_file_metrics(self) -> None:
+        patch = (
+            "*** Begin Patch\n"
+            "*** Update File: src/a.py\n"
+            "*** Add File: C:/work/alpha/new.py\n"
+            "*** Delete File: old.txt\n"
+            "*** End Patch"
+        )
+        records = [
+            {
+                "type": "session_meta",
+                "payload": {"cwd": "\\\\?\\C:\\work\\alpha", "cli_version": "test"},
+            },
+            {"type": "turn_context", "payload": {"model": "gpt-test"}},
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "change files"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "done"}],
+                },
+            },
+            {"type": "token_usage_record", "payload": None},
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "custom_tool_call",
+                    "name": "exec",
+                    "input": patch,
+                },
+            },
+        ]
+        self.rollout.write_text(
+            "\n".join(json.dumps(record) for record in records) + "\n",
+            encoding="utf-8",
+        )
+        session = self._adapter().sessions()[0]
+        self.assertEqual(session.prompt_count, 1)
+        self.assertEqual(session.prompt_chars, len("change files"))
+        self.assertEqual(session.assistant_count, 1)
+        self.assertEqual(
+            set(session.modified_paths),
+            {"src\\a.py", "C:\\work\\alpha\\new.py", "old.txt"},
+        )
+        self.assertEqual(session.model_kind, "general")
+
+    def test_extract_patch_paths_handles_literal_newlines(self) -> None:
+        patch = (
+            "*** Begin Patch\\n"
+            "*** Update File: C:/work/alpha/a.py\\n"
+            "*** Add File: docs/new.md\\n"
+            "*** End Patch"
+        )
+        self.assertEqual(
+            extract_patch_paths(patch),
+            ["C:\\work\\alpha\\a.py", "docs\\new.md"],
+        )
 
     def test_rollout_tail_uses_latest_token_count(self) -> None:
         later = _token_count()

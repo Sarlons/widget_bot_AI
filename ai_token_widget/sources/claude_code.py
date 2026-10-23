@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable
 
 from .. import claude_statusline
+from ..core.load import classify_model_kind
 from ..core.model_limits import claude_context_window
 from ..core.models import Confidence, Quota, QuotaWindow, Session, SessionState, Usage
 from .base import SourceAdapter
@@ -27,6 +28,10 @@ from .base import SourceAdapter
 DEFAULT_ROOT = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
 CACHE_LIMIT = 64
 SNAPSHOT_MAX_AGE_HOURS = 24.0
+WRITE_TOOL_NAMES = frozenset(
+    {"Write", "Edit", "MultiEdit", "NotebookEdit", "apply_patch"}
+)
+PATH_KEYS = ("file_path", "path", "notebook_path")
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,10 @@ class ClaudeFileData:
     last_activity: datetime | None = None
     last_role: str | None = None
     last_role_at: datetime | None = None
+    prompt_count: int = 0
+    prompt_chars: int = 0
+    assistant_count: int = 0
+    modified_paths: tuple[str, ...] = ()
 
 
 def parse_iso(value: str | None) -> datetime | None:
@@ -69,6 +78,63 @@ def _usage_from(raw: dict) -> Usage:
         cache_read_tokens=int(raw.get("cache_read_input_tokens") or 0),
         cache_write_tokens=int(raw.get("cache_creation_input_tokens") or 0),
     )
+
+
+def _is_user_prompt(content) -> bool:
+    """Count real prompts, not tool-result records.
+
+    Claude stores tool results as user-role records. A prompt can be a plain
+    string or a list of text blocks; anything containing a tool_result block is
+    a tool response and is excluded.
+    """
+    if isinstance(content, str):
+        return bool(content.strip())
+    if not isinstance(content, list):
+        return False
+    kinds = {
+        block.get("type")
+        for block in content
+        if isinstance(block, dict)
+    }
+    return "text" in kinds and "tool_result" not in kinds
+
+
+def _prompt_chars(content) -> int:
+    """Return prompt text length without retaining the text."""
+    if isinstance(content, str):
+        return len(content)
+    if not isinstance(content, list):
+        return 0
+    total = 0
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "text":
+            continue
+        text = block.get("text")
+        if isinstance(text, str):
+            total += len(text)
+    return total
+
+
+def _tool_paths(content) -> list[str]:
+    if not isinstance(content, list):
+        return []
+    paths: list[str] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            continue
+        if block.get("name") not in WRITE_TOOL_NAMES:
+            continue
+        data = block.get("input")
+        if not isinstance(data, dict):
+            continue
+        for key in PATH_KEYS:
+            value = data.get(key)
+            if isinstance(value, str):
+                cleaned = normalize_path(value)
+                if cleaned:
+                    paths.append(cleaned)
+                    break
+    return paths
 
 
 def _quota_from_snapshot(
@@ -170,6 +236,12 @@ class ClaudeAdapter(SourceAdapter):
         unkeyed_usage = Usage()
         usage_by_id: dict[str, Usage] = {}
         usage_last = Usage()
+        assistant_ids: set[str] = set()
+        unkeyed_assistants = 0
+        prompt_count = 0
+        prompt_chars = 0
+        modified_paths: list[str] = []
+        seen_modified: set[str] = set()
         started_at = None
         last_activity = None
         last_role = None
@@ -218,13 +290,37 @@ class ClaudeAdapter(SourceAdapter):
                             last_role = role
                             last_role_at = timestamp
 
+                    content = message.get("content")
+                    if (
+                        role == "user"
+                        and not record.get("isSidechain")
+                        and not record.get("isMeta")
+                        and _is_user_prompt(content)
+                    ):
+                        prompt_count += 1
+                        prompt_chars += _prompt_chars(content)
+
+                    candidate_model = message.get("model")
+                    synthetic = candidate_model == "<synthetic>"
+                    if isinstance(candidate_model, str) and not synthetic:
+                        model = candidate_model
+
+                    if role == "assistant" and not synthetic:
+                        message_id = message.get("id")
+                        if isinstance(message_id, str) and message_id:
+                            assistant_ids.add(message_id)
+                        else:
+                            unkeyed_assistants += 1
+                        for path_value in _tool_paths(content):
+                            key = os.path.normcase(os.path.normpath(path_value))
+                            if key not in seen_modified:
+                                seen_modified.add(key)
+                                modified_paths.append(path_value)
+
                     usage = message.get("usage")
                     if not isinstance(usage, dict):
                         continue
-                    candidate_model = message.get("model")
-                    if isinstance(candidate_model, str) and candidate_model != "<synthetic>":
-                        model = candidate_model
-                    if candidate_model == "<synthetic>":
+                    if synthetic:
                         continue
 
                     parsed_usage = _usage_from(usage)
@@ -258,6 +354,10 @@ class ClaudeAdapter(SourceAdapter):
             last_activity=last_activity,
             last_role=last_role,
             last_role_at=last_role_at,
+            prompt_count=prompt_count,
+            prompt_chars=prompt_chars,
+            assistant_count=len(assistant_ids) + unkeyed_assistants,
+            modified_paths=tuple(modified_paths),
         )
         self._cache[str(path)] = (signature[0], signature[1], data)
         if len(self._cache) > CACHE_LIMIT:
@@ -345,6 +445,13 @@ class ClaudeAdapter(SourceAdapter):
                     updated_at=activity,
                     cwd=cwd,
                     source="cli",
+                    prompt_count=data.prompt_count,
+                    prompt_chars=data.prompt_chars,
+                    assistant_count=data.assistant_count,
+                    model_kind=classify_model_kind(
+                        data.model, data.usage_total.reasoning_tokens
+                    ),
+                    modified_paths=data.modified_paths,
                 )
             )
         return sessions

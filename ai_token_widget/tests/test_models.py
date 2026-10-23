@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from ai_token_widget.core.formatting import format_cost, format_tokens
+from ai_token_widget.core.formatting import format_bytes, format_cost, format_tokens
 from ai_token_widget.core.models import QuotaWindow, Session, SessionState, Usage
 
 
@@ -84,6 +84,14 @@ class FormattingTest(unittest.TestCase):
         self.assertEqual(format_cost(1.234), "$1.23")
         self.assertEqual(format_cost(0.0004), "<$0.01")
         self.assertEqual(format_cost(None), "—")
+
+    def test_bytes(self) -> None:
+        self.assertEqual(format_bytes(0), "0 B")
+        self.assertEqual(format_bytes(999), "999 B")
+        self.assertEqual(format_bytes(1_500), "1.5 KB")
+        self.assertEqual(format_bytes(2_500_000), "2.5 MB")
+        self.assertEqual(format_bytes(2_500_000_000), "2.5 GB")
+        self.assertEqual(format_bytes(None), "—")
 
 
 if __name__ == "__main__":

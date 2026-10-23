@@ -21,6 +21,20 @@ def format_percent(value: float | None) -> str:
     return f"{value:.0f}%"
 
 
+def format_bytes(value: int | None) -> str:
+    """Format a byte count for the compact project rows."""
+    if value is None:
+        return "—"
+    size = max(0, int(value))
+    if size < 1_000:
+        return f"{size} B"
+    if size < 1_000_000:
+        return f"{size / 1_000:.1f} KB"
+    if size < 1_000_000_000:
+        return f"{size / 1_000_000:.1f} MB"
+    return f"{size / 1_000_000_000:.1f} GB"
+
+
 def format_cost(value: float | None) -> str:
     if value is None:
         return "—"

@@ -76,6 +76,36 @@ class CardTest(unittest.TestCase):
         self.assertIn("quota", texts.lower())
         self.assertIn("unavailable", texts.lower())
 
+    def test_project_section_shows_folder_tokens_and_load(self) -> None:
+        from PySide6.QtWidgets import QLabel
+
+        from ai_token_widget.core.models import Session, SessionState, Usage
+        from ai_token_widget.core.projects import aggregate_projects
+        from ai_token_widget.ui.projects import ProjectSection
+
+        session = Session(
+            id="s",
+            agent="codex",
+            model="gpt-test",
+            project="alpha",
+            state=SessionState.IDLE,
+            usage_total=Usage(reported_total=1_500),
+            cwd="C:\\work\\alpha",
+            context_used=100,
+            context_window=10_000,
+            prompt_count=1,
+            assistant_count=2,
+            updated_at=datetime.now(timezone.utc),
+        )
+        section = ProjectSection(aggregate_projects([session]))
+        texts = " ".join(label.text() for label in section.findChildren(QLabel))
+        self.assertIn("PROJECTS", texts)
+        self.assertIn("alpha", texts)
+        self.assertIn("1.5K tok", texts)
+        self.assertIn("Codex", texts)
+        self.assertIn("no edits recorded", texts)
+        self.assertIn("1/5 LIGHT", texts)
+
 
 if __name__ == "__main__":
     unittest.main()

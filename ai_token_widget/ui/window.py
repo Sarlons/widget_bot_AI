@@ -40,11 +40,13 @@ from ..core.formatting import format_age
 from ..core.grouping import group_sessions
 from ..core.models import SessionState, Snapshot
 from ..core.notifications import NotificationHistory, play_notification_sound
+from ..core.projects import aggregate_projects
 from ..core.registry import Registry
 from . import theme
 from .cards import SessionCard
 from .groups import GroupHeader
 from .history import NotificationHistoryDialog
+from .projects import ProjectSection
 from .refresh import RefreshWorker
 from .settings import SettingsDialog
 
@@ -624,6 +626,9 @@ class WidgetWindow(QWidget):
             SessionFilter(self._filter_mode, self._search.text()),
             self._config.low_quota_percent,
         )
+        projects = aggregate_projects(filtered)
+        if projects:
+            self._cards_layout.addWidget(ProjectSection(projects))
         groups = group_sessions(filtered)
         for group in groups:
             container = QWidget()

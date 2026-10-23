@@ -121,6 +121,24 @@ class Session:
     cwd: str | None = None
     pid: int | None = None
     source: str = ""
+    prompt_count: int = 0
+    # Total characters in real user prompts. The text itself is never retained;
+    # this only feeds the management-load amplitude heuristic.
+    prompt_chars: int = 0
+    assistant_count: int = 0
+    model_kind: str = "general"
+    # Paths reported by write/edit tools. File contents are never read; the
+    # project view only stats the deduplicated paths to estimate their size.
+    modified_paths: tuple[str, ...] = ()
+
+    @property
+    def context_pressure(self) -> float | None:
+        used = self.context_used_percent
+        return None if used is None else used / 100.0
+
+    @property
+    def modified_file_count(self) -> int:
+        return len(set(self.modified_paths))
 
     @property
     def context_used_percent(self) -> float | None:

@@ -160,6 +160,40 @@ QLabel#groupIssue {{
     font-size: 9px;
     font-weight: 600;
 }}
+QWidget#projectSection {{
+    background: transparent;
+}}
+QLabel#projectSectionTitle {{
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.0px;
+    color: {MUTED};
+}}
+QLabel#projectSectionMeta {{
+    font-size: 9px;
+    color: {FAINT};
+}}
+QFrame#projectCard {{
+    background: {SURFACE};
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+}}
+QLabel#projectName {{
+    font-size: 11px;
+    font-weight: 600;
+    color: {TEXT};
+}}
+QLabel#projectTokens {{
+    font-size: 9px;
+    color: {MUTED};
+}}
+QLabel#projectMeta {{
+    font-size: 9px;
+    color: {FAINT};
+}}
+QLabel#projectLoad {{
+    font-size: 9px;
+}}
 QPushButton#filterClear {{
     background: transparent;
     border: none;
