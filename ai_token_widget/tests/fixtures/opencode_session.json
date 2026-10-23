@@ -1,0 +1,13 @@
+{
+  "agent": "build",
+  "cost": 0.0,
+  "model": "{\"id\":\"deepseek-v4.1-flash-free\",\"providerID\":\"opencode\"}",
+  "time_created": "2026-10-22T17:18:05+00:00",
+  "time_updated": "2026-10-22T17:26:10+00:00",
+  "tokens_cache_read": 748800,
+  "tokens_cache_write": 0,
+  "tokens_input": 54766,
+  "tokens_output": 16467,
+  "tokens_reasoning": 15165,
+  "version": "2.1.3"
+}

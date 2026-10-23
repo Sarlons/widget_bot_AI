@@ -1,0 +1,16 @@
+[
+  {
+    "updated_at": "2026-10-22T17:24:30+00:00",
+    "model": "gpt-6.1-sol",
+    "tokens_used": 13901667,
+    "source": "vscode",
+    "cli_version": "0.163.0-alpha.10.2"
+  },
+  {
+    "updated_at": "2026-10-22T17:22:00+00:00",
+    "model": "gpt-6.1-sol",
+    "tokens_used": 30035405,
+    "source": "vscode",
+    "cli_version": "0.163.0-alpha.10.2"
+  }
+]

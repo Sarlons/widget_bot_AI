@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "generated_at": "2026-10-22T17:26:15+00:00",
+  "note": "Numeric token counts preserved; identifiers, paths, prompts and message content removed. Never regenerate from a store containing unreviewed secrets without re-running this sanitizer.",
+  "sources": {
+    "claude_code": {
+      "format": "jsonl",
+      "records": 3
+    },
+    "codex_token_count": {
+      "format": "json",
+      "records": 1
+    },
+    "codex_threads": {
+      "format": "json",
+      "records": 2
+    },
+    "opencode_session": {
+      "format": "json",
+      "records": 1
+    }
+  }
+}

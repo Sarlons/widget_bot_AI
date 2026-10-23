@@ -1,0 +1,39 @@
+AI Token Widget
+===============
+
+Launch "AI Token Widget" from the Start menu. The widget hides to the system
+tray; use the tray menu to show it again or to quit.
+
+Settings and logs
+-----------------
+Configuration: %APPDATA%\AITokenWidget\config.json
+History:       %APPDATA%\AITokenWidget\notifications.json
+Log:           %APPDATA%\AITokenWidget\widget.log
+
+Uninstalling keeps this folder so your settings, notification history and logs
+are not lost. Delete it manually if you want a clean reset.
+
+Optional Claude Code quota bridge
+---------------------------------
+The installer does NOT modify ~/.claude/settings.json. The bridge remains
+strictly opt-in and is only needed if you want exact Claude Code quota.
+
+Open PowerShell and run the commands below. If you installed the app in a
+different folder, adjust the path.
+
+  Install:
+    & "$env:LOCALAPPDATA\Programs\AITokenWidget\AITokenWidgetBridge\AITokenWidgetBridge.exe" install
+
+  Check status:
+    & "$env:LOCALAPPDATA\Programs\AITokenWidget\AITokenWidgetBridge\AITokenWidgetBridge.exe" status
+
+  Undo and restore the previous statusLine:
+    & "$env:LOCALAPPDATA\Programs\AITokenWidget\AITokenWidgetBridge\AITokenWidgetBridge.exe" uninstall
+
+If Claude Code already has a different statusLine, install refuses to replace
+it. Re-run with --force to replace it; the previous value is kept for undo.
+Restart Claude Code after installing or removing the bridge.
+
+The binaries are not code-signed, so Windows SmartScreen may show a warning the
+first time the installer or the application is started. The installer closes a
+running widget cleanly before replacing or removing files.
