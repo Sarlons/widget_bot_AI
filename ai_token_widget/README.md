@@ -170,6 +170,25 @@ test suite, then produces:
 
 Useful switches: `-SkipTests`, `-SkipPortable`, `-SkipInstaller`.
 
+Code signing is optional and off by default. When a certificate is available:
+
+```powershell
+# certificate in Cert:\CurrentUser\My (recommended)
+powershell -ExecutionPolicy Bypass -File ai_token_widget\packaging\build.ps1 `
+  -CertificateThumbprint <thumbprint>
+
+# PFX file; keep the password out of the command line
+$env:AITW_CERT_PASSWORD = "<password>"
+powershell -ExecutionPolicy Bypass -File ai_token_widget\packaging\build.ps1 `
+  -CertificatePath C:\path\to\certificate.pfx
+```
+
+The script signs both executables before packaging and the setup executable after
+Inno Setup runs. It looks for `signtool.exe` in the Windows SDK or on `PATH`; use
+`-SignToolPath` otherwise. `-TimestampServer ""` disables timestamping.
+Self-signed certificates may fail trust verification, so local test builds can
+add `-SkipSignatureVerification`.
+
 The installer runs without administrator rights and installs under
 `%LOCALAPPDATA%\Programs\AITokenWidget`. It can add an optional desktop shortcut
 and an optional `Run`-key entry for starting with Windows (both unchecked by
@@ -476,8 +495,9 @@ The final audit compared adapter and card values with the real local stores:
   there is no custom sound picker or history export.
 - Filters are session-only; there are no saved filter presets or provider-only
   filters. Collapse a provider group to hide it without filtering the data.
-- Release binaries are unsigned, so Windows SmartScreen may warn on first launch.
-  There is no auto-update mechanism; rebuild and reinstall to upgrade.
+- Release binaries are unsigned unless built with the optional signing
+  parameters, so Windows SmartScreen may warn on first launch. There is no
+  auto-update mechanism; rebuild and reinstall to upgrade.
 - The packaged GUI and bridge are x64 Windows builds. A 32-bit or ARM64 build
   would need a separate PyInstaller run.
 - Project file totals only include tool-reported write/edit paths. Writes done

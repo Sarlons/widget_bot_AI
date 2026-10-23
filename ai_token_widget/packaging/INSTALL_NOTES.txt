@@ -34,6 +34,6 @@ If Claude Code already has a different statusLine, install refuses to replace
 it. Re-run with --force to replace it; the previous value is kept for undo.
 Restart Claude Code after installing or removing the bridge.
 
-The binaries are not code-signed, so Windows SmartScreen may show a warning the
+If this build is not code-signed, Windows SmartScreen may show a warning the
 first time the installer or the application is started. The installer closes a
 running widget cleanly before replacing or removing files.

@@ -2,7 +2,12 @@
 param(
     [switch]$SkipTests,
     [switch]$SkipPortable,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [string]$SignToolPath,
+    [string]$CertificateThumbprint,
+    [string]$CertificatePath,
+    [string]$TimestampServer = "http://timestamp.digicert.com",
+    [switch]$SkipSignatureVerification
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +35,85 @@ function Remove-WithRetry {
     }
 }
 
+function Resolve-SignTool {
+    param([string]$ExplicitPath)
+
+    if ($ExplicitPath) {
+        if (-not (Test-Path $ExplicitPath)) {
+            throw "signtool.exe not found at $ExplicitPath"
+        }
+        return (Resolve-Path $ExplicitPath).Path
+    }
+
+    $roots = @()
+    if (${env:ProgramFiles(x86)}) {
+        $roots += Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+    }
+    if ($env:ProgramFiles) {
+        $roots += Join-Path $env:ProgramFiles "Windows Kits\10\bin"
+    }
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+        $found = Get-ChildItem $root -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
+    }
+
+    $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+    return $null
+}
+
+function Invoke-SignFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$SignTool,
+        [Parameter(Mandatory = $true)][string]$File,
+        [string]$Thumbprint,
+        [string]$PfxPath,
+        [string]$TimestampUrl
+    )
+
+    if (-not (Test-Path $File)) {
+        throw "Cannot sign missing file: $File"
+    }
+
+    $arguments = @("sign", "/fd", "SHA256")
+    if ($Thumbprint) {
+        $arguments += @("/sha1", $Thumbprint)
+    }
+    else {
+        $arguments += @("/f", $PfxPath)
+        if ($env:AITW_CERT_PASSWORD) {
+            $arguments += @("/p", $env:AITW_CERT_PASSWORD)
+        }
+    }
+    if ($TimestampUrl) {
+        $arguments += @("/tr", $TimestampUrl, "/td", "SHA256")
+    }
+    $arguments += $File
+
+    & $SignTool @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Signing failed for $File (exit code $LASTEXITCODE)"
+    }
+
+    if (-not $SkipSignatureVerification) {
+        & $SignTool verify /pa /v $File | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Signature verification failed for $File (exit code $LASTEXITCODE)"
+        }
+    }
+    Write-Host "Signed: $File"
+}
+
 $packaging = $PSScriptRoot
 $project = Split-Path -Parent $packaging
 $repo = Split-Path -Parent $project
@@ -37,6 +121,26 @@ $python = Join-Path $project ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $python)) {
     throw "Virtual environment not found at $python. Create it and install requirements-build.txt first."
+}
+
+if ($CertificateThumbprint -and $CertificatePath) {
+    throw "Specify either -CertificateThumbprint or -CertificatePath, not both."
+}
+if ($CertificatePath -and -not (Test-Path $CertificatePath)) {
+    throw "Certificate file not found: $CertificatePath"
+}
+
+$signingRequested = [bool]($CertificateThumbprint -or $CertificatePath)
+$signTool = $null
+if ($signingRequested) {
+    $signTool = Resolve-SignTool -ExplicitPath $SignToolPath
+    if (-not $signTool) {
+        throw "Code signing was requested but signtool.exe was not found. Install the Windows SDK or pass -SignToolPath."
+    }
+    Write-Host "Code signing enabled: $signTool"
+}
+elseif ($SignToolPath) {
+    Write-Warning "-SignToolPath was provided without a certificate; signing will be skipped."
 }
 
 Push-Location $repo
@@ -106,6 +210,14 @@ try {
         }
     }
 
+    if ($signingRequested) {
+        foreach ($file in @($mainExe, $bridgeExe)) {
+            Invoke-SignFile -SignTool $signTool -File $file `
+                -Thumbprint $CertificateThumbprint -PfxPath $CertificatePath `
+                -TimestampUrl $TimestampServer
+        }
+    }
+
     if (Test-Path $appBridge) {
         Remove-WithRetry $appBridge
     }
@@ -166,6 +278,16 @@ try {
             & $iscc "/DAppVersion=$version" "/DSourceDir=$dist" "/DOutputDir=$installerDir" "/DIconFile=$assets\icon.ico" (Join-Path $packaging "installer.iss")
             if ($LASTEXITCODE -ne 0) {
                 throw "Inno Setup build failed"
+            }
+
+            $setupExe = Join-Path $installerDir "AI-Token-Widget-$version-setup.exe"
+            if (-not (Test-Path $setupExe)) {
+                throw "Expected installer output missing: $setupExe"
+            }
+            if ($signingRequested) {
+                Invoke-SignFile -SignTool $signTool -File $setupExe `
+                    -Thumbprint $CertificateThumbprint -PfxPath $CertificatePath `
+                    -TimestampUrl $TimestampServer
             }
             Write-Host "Installer: $installerDir"
         }
